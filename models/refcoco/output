@@ -1,0 +1,328 @@
+W0728 18:07:57.938830 2753681 site-packages/torch/distributed/run.py:766] 
+W0728 18:07:57.938830 2753681 site-packages/torch/distributed/run.py:766] *****************************************
+W0728 18:07:57.938830 2753681 site-packages/torch/distributed/run.py:766] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W0728 18:07:57.938830 2753681 site-packages/torch/distributed/run.py:766] *****************************************
+/data/datasets/zguobd/miniconda3/envs/lavt/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+/data/datasets/zguobd/miniconda3/envs/lavt/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+/data/datasets/zguobd/miniconda3/envs/lavt/lib/python3.10/site-packages/mmcv/__init__.py:20: UserWarning: On January 1, 2023, MMCV will release v2.0.0, in which it will remove components related to the training process and add a data transformation module. In addition, it will rename the package names mmcv to mmcv-lite and mmcv-full to mmcv. See https://github.com/open-mmlab/mmcv/blob/master/docs/en/compatibility.md for more details.
+  warnings.warn(
+/data/datasets/zguobd/miniconda3/envs/lavt/lib/python3.10/site-packages/mmcv/__init__.py:20: UserWarning: On January 1, 2023, MMCV will release v2.0.0, in which it will remove components related to the training process and add a data transformation module. In addition, it will rename the package names mmcv to mmcv-lite and mmcv-full to mmcv. See https://github.com/open-mmlab/mmcv/blob/master/docs/en/compatibility.md for more details.
+  warnings.warn(
+RANK and WORLD_SIZE in environment: 1/2
+Initializing distributed mode with rank 1 and world size 2
+RANK and WORLD_SIZE in environment: 0/2
+Initializing distributed mode with rank 0 and world size 2
+/data/datasets/zguobd/miniconda3/envs/lavt/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/data/datasets/zguobd/miniconda3/envs/lavt/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank0]:[W728 18:08:02.428977216 ProcessGroupNCCL.cpp:4718] [PG ID 0 PG GUID 0 Rank 0]  using GPU 0 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can pecify device_id in init_process_group() to force use of a particular device.
+[rank1]:[W728 18:08:02.428988582 ProcessGroupNCCL.cpp:4718] [PG ID 0 PG GUID 0 Rank 1]  using GPU 1 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can pecify device_id in init_process_group() to force use of a particular device.
+Image size: 480
+loading dataset refcoco into memory...
+creating index...
+index created.
+DONE (t=8.20s)
+loading dataset refcoco into memory...
+creating index...
+index created.
+DONE (t=8.80s)
+local rank 0 / global rank 0 successfully built train dataset.
+Building data loader...
+batch size: 8
+number of workers: 8
+pin memory: true
+number of training samples: 42404
+number of validation samples: 3811
+lavt
+Window size 12!
+/data/datasets/zguobd/miniconda3/envs/lavt/lib/python3.10/site-packages/torch/functional.py:554: UserWarning: torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument. (Triggered internally at /pytorch/aten/src/ATen/native/TensorShape.cpp:4314.)
+  return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]
+Initializing Multi-modal Swin Transformer weights from ./pretrained_weights/swin_base_patch4_window12_384_22k.pth
+/data/datasets/zguobd/miniconda3/envs/lavt/lib/python3.10/site-packages/torch/functional.py:554: UserWarning: torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument. (Triggered internally at /pytorch/aten/src/ATen/native/TensorShape.cpp:4314.)
+  return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]
+/data/datasets/zguobd/LAVT-RIS/train.py:116: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = GradScaler()
+/data/datasets/zguobd/LAVT-RIS/train.py:116: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = GradScaler()
+/data/datasets/zguobd/LAVT-RIS/train.py:130: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with autocast():
+/data/datasets/zguobd/LAVT-RIS/train.py:130: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with autocast():
+/data/datasets/zguobd/miniconda3/envs/lavt/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/data/datasets/zguobd/miniconda3/envs/lavt/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+Epoch: [0]  [   0/2650]  eta: 2:18:52  lr: 5e-05  loss: 0.8640 (0.8640)  time: 3.1443  data: 0.8595  max mem: 12648
+Epoch: [0]  [  10/2650]  eta: 0:32:31  lr: 5e-05  loss: 0.8009 (0.8017)  time: 0.7391  data: 0.0785  max mem: 15010
+Epoch: [0]  [  20/2650]  eta: 0:27:21  lr: 5e-05  loss: 0.7266 (0.7489)  time: 0.4982  data: 0.0003  max mem: 15010
+Epoch: [0]  [  30/2650]  eta: 0:25:24  lr: 5e-05  loss: 0.6268 (0.6881)  time: 0.4956  data: 0.0002  max mem: 15012
+Epoch: [0]  [  40/2650]  eta: 0:24:24  lr: 5e-05  loss: 0.4972 (0.6206)  time: 0.4949  data: 0.0003  max mem: 15012
+Epoch: [0]  [  50/2650]  eta: 0:23:47  lr: 5e-05  loss: 0.3606 (0.5653)  time: 0.4979  data: 0.0003  max mem: 15013
+Epoch: [0]  [  60/2650]  eta: 0:23:19  lr: 5e-05  loss: 0.3352 (0.5283)  time: 0.4977  data: 0.0003  max mem: 15013
+Epoch: [0]  [  70/2650]  eta: 0:22:58  lr: 5e-05  loss: 0.3284 (0.5024)  time: 0.4962  data: 0.0003  max mem: 15013
+Epoch: [0]  [  80/2650]  eta: 0:22:42  lr: 5e-05  loss: 0.3136 (0.4804)  time: 0.4996  data: 0.0003  max mem: 15013
+Epoch: [0]  [  90/2650]  eta: 0:22:29  lr: 5e-05  loss: 0.3042 (0.4614)  time: 0.5016  data: 0.0003  max mem: 15013
+Epoch: [0]  [ 100/2650]  eta: 0:22:27  lr: 5e-05  loss: 0.3042 (0.4480)  time: 0.5219  data: 0.0004  max mem: 15017
+Epoch: [0]  [ 110/2650]  eta: 0:22:14  lr: 5e-05  loss: 0.2963 (0.4359)  time: 0.5182  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 120/2650]  eta: 0:22:04  lr: 5e-05  loss: 0.2976 (0.4257)  time: 0.4977  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 130/2650]  eta: 0:21:52  lr: 5e-05  loss: 0.2979 (0.4168)  time: 0.4947  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 140/2650]  eta: 0:21:42  lr: 5e-05  loss: 0.3005 (0.4107)  time: 0.4908  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 150/2650]  eta: 0:21:32  lr: 5e-05  loss: 0.3142 (0.4048)  time: 0.4918  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 160/2650]  eta: 0:21:26  lr: 5e-05  loss: 0.3053 (0.3991)  time: 0.4998  data: 0.0006  max mem: 15036
+Epoch: [0]  [ 170/2650]  eta: 0:21:18  lr: 5e-05  loss: 0.2983 (0.3935)  time: 0.5038  data: 0.0006  max mem: 15036
+Epoch: [0]  [ 180/2650]  eta: 0:21:10  lr: 5e-05  loss: 0.2885 (0.3882)  time: 0.4980  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 190/2650]  eta: 0:21:03  lr: 5e-05  loss: 0.2960 (0.3855)  time: 0.4990  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 200/2650]  eta: 0:21:04  lr: 5e-05  loss: 0.3404 (0.3847)  time: 0.5313  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 210/2650]  eta: 0:20:58  lr: 5e-05  loss: 0.3282 (0.3813)  time: 0.5358  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 220/2650]  eta: 0:20:51  lr: 5e-05  loss: 0.3079 (0.3796)  time: 0.5061  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 230/2650]  eta: 0:20:44  lr: 5e-05  loss: 0.3201 (0.3770)  time: 0.4991  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 240/2650]  eta: 0:20:37  lr: 5e-05  loss: 0.3186 (0.3750)  time: 0.4937  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 250/2650]  eta: 0:20:30  lr: 5e-05  loss: 0.3018 (0.3717)  time: 0.4963  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 260/2650]  eta: 0:20:23  lr: 5e-05  loss: 0.2803 (0.3687)  time: 0.4964  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 270/2650]  eta: 0:20:17  lr: 5e-05  loss: 0.2869 (0.3667)  time: 0.4950  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 280/2650]  eta: 0:20:10  lr: 5e-05  loss: 0.2945 (0.3651)  time: 0.4954  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 290/2650]  eta: 0:20:05  lr: 5e-05  loss: 0.2965 (0.3640)  time: 0.4992  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 300/2650]  eta: 0:20:00  lr: 5e-05  loss: 0.2970 (0.3621)  time: 0.5110  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 310/2650]  eta: 0:19:54  lr: 5e-05  loss: 0.3015 (0.3604)  time: 0.5067  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 320/2650]  eta: 0:19:48  lr: 5e-05  loss: 0.2947 (0.3594)  time: 0.4949  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 330/2650]  eta: 0:19:42  lr: 5e-05  loss: 0.3181 (0.3593)  time: 0.4958  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 340/2650]  eta: 0:19:36  lr: 5e-05  loss: 0.3010 (0.3576)  time: 0.4977  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 350/2650]  eta: 0:19:30  lr: 5e-05  loss: 0.2986 (0.3568)  time: 0.4968  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 360/2650]  eta: 0:19:25  lr: 5e-05  loss: 0.3054 (0.3548)  time: 0.5018  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 370/2650]  eta: 0:19:19  lr: 5e-05  loss: 0.2745 (0.3528)  time: 0.5001  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 380/2650]  eta: 0:19:13  lr: 5e-05  loss: 0.2795 (0.3516)  time: 0.4971  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 390/2650]  eta: 0:19:07  lr: 5e-05  loss: 0.2920 (0.3503)  time: 0.4962  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 400/2650]  eta: 0:19:04  lr: 5e-05  loss: 0.2682 (0.3483)  time: 0.5220  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 410/2650]  eta: 0:18:59  lr: 5e-05  loss: 0.2753 (0.3479)  time: 0.5249  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 420/2650]  eta: 0:18:54  lr: 5e-05  loss: 0.2966 (0.3474)  time: 0.5028  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 430/2650]  eta: 0:18:48  lr: 5e-05  loss: 0.2846 (0.3460)  time: 0.5063  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 440/2650]  eta: 0:18:43  lr: 5e-05  loss: 0.2758 (0.3449)  time: 0.5075  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 450/2650]  eta: 0:18:38  lr: 5e-05  loss: 0.3065 (0.3444)  time: 0.5023  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 460/2650]  eta: 0:18:32  lr: 5e-05  loss: 0.3066 (0.3434)  time: 0.4988  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 470/2650]  eta: 0:18:28  lr: 5e-05  loss: 0.3035 (0.3427)  time: 0.5097  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 480/2650]  eta: 0:18:22  lr: 5e-05  loss: 0.3059 (0.3416)  time: 0.5066  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 490/2650]  eta: 0:18:17  lr: 5e-05  loss: 0.2793 (0.3405)  time: 0.5004  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 500/2650]  eta: 0:18:12  lr: 5e-05  loss: 0.2756 (0.3391)  time: 0.5150  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 510/2650]  eta: 0:18:07  lr: 5e-05  loss: 0.2783 (0.3381)  time: 0.5152  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 520/2650]  eta: 0:18:01  lr: 5e-05  loss: 0.2783 (0.3373)  time: 0.4975  data: 0.0005  max mem: 15036
+Epoch: [0]  [ 530/2650]  eta: 0:17:56  lr: 5e-05  loss: 0.2585 (0.3362)  time: 0.4943  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 540/2650]  eta: 0:17:50  lr: 5e-05  loss: 0.2686 (0.3354)  time: 0.4939  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 550/2650]  eta: 0:17:45  lr: 5e-05  loss: 0.2954 (0.3348)  time: 0.4988  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 560/2650]  eta: 0:17:40  lr: 5e-05  loss: 0.2841 (0.3337)  time: 0.5012  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 570/2650]  eta: 0:17:34  lr: 5e-05  loss: 0.2862 (0.3330)  time: 0.5003  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 580/2650]  eta: 0:17:29  lr: 5e-05  loss: 0.2958 (0.3327)  time: 0.4989  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 590/2650]  eta: 0:17:24  lr: 5e-05  loss: 0.3214 (0.3322)  time: 0.4990  data: 0.0005  max mem: 15036
+Epoch: [0]  [ 600/2650]  eta: 0:17:19  lr: 5e-05  loss: 0.2753 (0.3314)  time: 0.5146  data: 0.0005  max mem: 15036
+Epoch: [0]  [ 610/2650]  eta: 0:17:14  lr: 5e-05  loss: 0.2753 (0.3307)  time: 0.5108  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 620/2650]  eta: 0:17:09  lr: 5e-05  loss: 0.2722 (0.3300)  time: 0.5030  data: 0.0005  max mem: 15036
+Epoch: [0]  [ 630/2650]  eta: 0:17:04  lr: 5e-05  loss: 0.2625 (0.3294)  time: 0.5101  data: 0.0005  max mem: 15036
+Epoch: [0]  [ 640/2650]  eta: 0:16:59  lr: 5e-05  loss: 0.2889 (0.3289)  time: 0.5094  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 650/2650]  eta: 0:16:53  lr: 5e-05  loss: 0.2889 (0.3284)  time: 0.5012  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 660/2650]  eta: 0:16:48  lr: 5e-05  loss: 0.3013 (0.3280)  time: 0.4983  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 670/2650]  eta: 0:16:43  lr: 5e-05  loss: 0.2895 (0.3272)  time: 0.4981  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 680/2650]  eta: 0:16:37  lr: 5e-05  loss: 0.2915 (0.3268)  time: 0.4943  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 690/2650]  eta: 0:16:32  lr: 5e-05  loss: 0.2985 (0.3260)  time: 0.4954  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 700/2650]  eta: 0:16:27  lr: 5e-05  loss: 0.2720 (0.3255)  time: 0.5083  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 710/2650]  eta: 0:16:22  lr: 5e-05  loss: 0.2720 (0.3248)  time: 0.5072  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 720/2650]  eta: 0:16:16  lr: 5e-05  loss: 0.2670 (0.3239)  time: 0.4932  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 730/2650]  eta: 0:16:11  lr: 5e-05  loss: 0.2722 (0.3235)  time: 0.4919  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 740/2650]  eta: 0:16:06  lr: 5e-05  loss: 0.2798 (0.3231)  time: 0.4943  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 750/2650]  eta: 0:16:00  lr: 5e-05  loss: 0.2702 (0.3222)  time: 0.4963  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 760/2650]  eta: 0:15:55  lr: 5e-05  loss: 0.2743 (0.3221)  time: 0.4962  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 770/2650]  eta: 0:15:50  lr: 5e-05  loss: 0.2849 (0.3217)  time: 0.4956  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 780/2650]  eta: 0:15:44  lr: 5e-05  loss: 0.2630 (0.3208)  time: 0.4933  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 790/2650]  eta: 0:15:39  lr: 5e-05  loss: 0.2604 (0.3203)  time: 0.4974  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 800/2650]  eta: 0:15:34  lr: 5e-05  loss: 0.2420 (0.3192)  time: 0.5109  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 810/2650]  eta: 0:15:29  lr: 5e-05  loss: 0.2462 (0.3186)  time: 0.5099  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 820/2650]  eta: 0:15:24  lr: 5e-05  loss: 0.2591 (0.3178)  time: 0.4984  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 830/2650]  eta: 0:15:19  lr: 5e-05  loss: 0.2433 (0.3170)  time: 0.5024  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 840/2650]  eta: 0:15:14  lr: 5e-05  loss: 0.2384 (0.3164)  time: 0.5083  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 850/2650]  eta: 0:15:09  lr: 5e-05  loss: 0.2411 (0.3157)  time: 0.5069  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 860/2650]  eta: 0:15:04  lr: 5e-05  loss: 0.2488 (0.3152)  time: 0.5005  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 870/2650]  eta: 0:14:59  lr: 5e-05  loss: 0.2521 (0.3144)  time: 0.4967  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 880/2650]  eta: 0:14:53  lr: 5e-05  loss: 0.2521 (0.3137)  time: 0.4981  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 890/2650]  eta: 0:14:48  lr: 5e-05  loss: 0.2579 (0.3131)  time: 0.5019  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 900/2650]  eta: 0:14:44  lr: 5e-05  loss: 0.2547 (0.3125)  time: 0.5164  data: 0.0005  max mem: 15036
+Epoch: [0]  [ 910/2650]  eta: 0:14:39  lr: 5e-05  loss: 0.2547 (0.3119)  time: 0.5157  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 920/2650]  eta: 0:14:33  lr: 5e-05  loss: 0.2574 (0.3113)  time: 0.4991  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 930/2650]  eta: 0:14:28  lr: 5e-05  loss: 0.2593 (0.3108)  time: 0.4958  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 940/2650]  eta: 0:14:23  lr: 5e-05  loss: 0.2558 (0.3102)  time: 0.4958  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 950/2650]  eta: 0:14:18  lr: 5e-05  loss: 0.2392 (0.3097)  time: 0.4976  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 960/2650]  eta: 0:14:13  lr: 5e-05  loss: 0.2449 (0.3092)  time: 0.5016  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 970/2650]  eta: 0:14:08  lr: 5e-05  loss: 0.2395 (0.3085)  time: 0.5001  data: 0.0003  max mem: 15036
+Epoch: [0]  [ 980/2650]  eta: 0:14:02  lr: 5e-05  loss: 0.2323 (0.3080)  time: 0.4971  data: 0.0004  max mem: 15036
+Epoch: [0]  [ 990/2650]  eta: 0:13:57  lr: 5e-05  loss: 0.2366 (0.3074)  time: 0.5000  data: 0.0004  max mem: 15036
+Epoch: [0]  [1000/2650]  eta: 0:13:53  lr: 5e-05  loss: 0.2260 (0.3066)  time: 0.5194  data: 0.0003  max mem: 15036
+Epoch: [0]  [1010/2650]  eta: 0:13:48  lr: 5e-05  loss: 0.2168 (0.3058)  time: 0.5153  data: 0.0003  max mem: 15036
+Epoch: [0]  [1020/2650]  eta: 0:13:42  lr: 5e-05  loss: 0.2167 (0.3049)  time: 0.4967  data: 0.0003  max mem: 15036
+Epoch: [0]  [1030/2650]  eta: 0:13:38  lr: 5e-05  loss: 0.2277 (0.3042)  time: 0.5076  data: 0.0003  max mem: 15036
+Epoch: [0]  [1040/2650]  eta: 0:13:32  lr: 5e-05  loss: 0.2297 (0.3037)  time: 0.5093  data: 0.0003  max mem: 15036
+Epoch: [0]  [1050/2650]  eta: 0:13:28  lr: 5e-05  loss: 0.2329 (0.3033)  time: 0.5071  data: 0.0004  max mem: 15036
+Epoch: [0]  [1060/2650]  eta: 0:13:22  lr: 5e-05  loss: 0.2300 (0.3026)  time: 0.5077  data: 0.0004  max mem: 15036
+Epoch: [0]  [1070/2650]  eta: 0:13:17  lr: 5e-05  loss: 0.2156 (0.3020)  time: 0.5050  data: 0.0004  max mem: 15036
+Epoch: [0]  [1080/2650]  eta: 0:13:12  lr: 5e-05  loss: 0.2156 (0.3013)  time: 0.4997  data: 0.0003  max mem: 15036
+Epoch: [0]  [1090/2650]  eta: 0:13:07  lr: 5e-05  loss: 0.2170 (0.3009)  time: 0.4945  data: 0.0003  max mem: 15036
+Epoch: [0]  [1100/2650]  eta: 0:13:02  lr: 5e-05  loss: 0.2434 (0.3005)  time: 0.5136  data: 0.0003  max mem: 15036
+Epoch: [0]  [1110/2650]  eta: 0:12:57  lr: 5e-05  loss: 0.2416 (0.2999)  time: 0.5110  data: 0.0003  max mem: 15036
+Epoch: [0]  [1120/2650]  eta: 0:12:52  lr: 5e-05  loss: 0.2416 (0.2994)  time: 0.4939  data: 0.0003  max mem: 15036
+Epoch: [0]  [1130/2650]  eta: 0:12:47  lr: 5e-05  loss: 0.2298 (0.2988)  time: 0.4957  data: 0.0003  max mem: 15036
+Epoch: [0]  [1140/2650]  eta: 0:12:42  lr: 5e-05  loss: 0.2211 (0.2982)  time: 0.4947  data: 0.0003  max mem: 15036
+Epoch: [0]  [1150/2650]  eta: 0:12:37  lr: 5e-05  loss: 0.2223 (0.2977)  time: 0.4989  data: 0.0003  max mem: 15036
+Epoch: [0]  [1160/2650]  eta: 0:12:31  lr: 5e-05  loss: 0.2379 (0.2973)  time: 0.4971  data: 0.0003  max mem: 15036
+Epoch: [0]  [1170/2650]  eta: 0:12:26  lr: 5e-05  loss: 0.2616 (0.2971)  time: 0.4920  data: 0.0004  max mem: 15036
+Epoch: [0]  [1180/2650]  eta: 0:12:21  lr: 5e-05  loss: 0.2337 (0.2968)  time: 0.4937  data: 0.0004  max mem: 15036
+Epoch: [0]  [1190/2650]  eta: 0:12:16  lr: 5e-05  loss: 0.2330 (0.2966)  time: 0.4961  data: 0.0003  max mem: 15036
+Epoch: [0]  [1200/2650]  eta: 0:12:11  lr: 5e-05  loss: 0.2330 (0.2961)  time: 0.5168  data: 0.0003  max mem: 15036
+Epoch: [0]  [1210/2650]  eta: 0:12:06  lr: 5e-05  loss: 0.2511 (0.2959)  time: 0.5174  data: 0.0003  max mem: 15036
+Epoch: [0]  [1220/2650]  eta: 0:12:01  lr: 5e-05  loss: 0.2511 (0.2954)  time: 0.4979  data: 0.0003  max mem: 15036
+Epoch: [0]  [1230/2650]  eta: 0:11:56  lr: 5e-05  loss: 0.2205 (0.2949)  time: 0.4970  data: 0.0003  max mem: 15036
+Epoch: [0]  [1240/2650]  eta: 0:11:51  lr: 5e-05  loss: 0.2287 (0.2948)  time: 0.4979  data: 0.0003  max mem: 15036
+Epoch: [0]  [1250/2650]  eta: 0:11:46  lr: 5e-05  loss: 0.2405 (0.2946)  time: 0.5030  data: 0.0003  max mem: 15036
+Epoch: [0]  [1260/2650]  eta: 0:11:41  lr: 5e-05  loss: 0.2480 (0.2944)  time: 0.5039  data: 0.0003  max mem: 15036
+Epoch: [0]  [1270/2650]  eta: 0:11:35  lr: 5e-05  loss: 0.2480 (0.2940)  time: 0.5022  data: 0.0003  max mem: 15036
+Epoch: [0]  [1280/2650]  eta: 0:11:30  lr: 5e-05  loss: 0.2349 (0.2936)  time: 0.5019  data: 0.0003  max mem: 15036
+Epoch: [0]  [1290/2650]  eta: 0:11:25  lr: 5e-05  loss: 0.2148 (0.2931)  time: 0.4994  data: 0.0003  max mem: 15036
+Epoch: [0]  [1300/2650]  eta: 0:11:21  lr: 5e-05  loss: 0.2123 (0.2926)  time: 0.5197  data: 0.0003  max mem: 15036
+Epoch: [0]  [1310/2650]  eta: 0:11:16  lr: 5e-05  loss: 0.2375 (0.2924)  time: 0.5195  data: 0.0003  max mem: 15036
+Epoch: [0]  [1320/2650]  eta: 0:11:10  lr: 5e-05  loss: 0.2494 (0.2921)  time: 0.5018  data: 0.0003  max mem: 15036
+Epoch: [0]  [1330/2650]  eta: 0:11:05  lr: 5e-05  loss: 0.2588 (0.2918)  time: 0.5010  data: 0.0003  max mem: 15036
+Epoch: [0]  [1340/2650]  eta: 0:11:00  lr: 5e-05  loss: 0.2436 (0.2914)  time: 0.4953  data: 0.0003  max mem: 15036
+Epoch: [0]  [1350/2650]  eta: 0:10:55  lr: 5e-05  loss: 0.2246 (0.2910)  time: 0.4932  data: 0.0003  max mem: 15036
+Epoch: [0]  [1360/2650]  eta: 0:10:50  lr: 5e-05  loss: 0.2204 (0.2906)  time: 0.4978  data: 0.0004  max mem: 15036
+Epoch: [0]  [1370/2650]  eta: 0:10:45  lr: 5e-05  loss: 0.2080 (0.2901)  time: 0.5024  data: 0.0004  max mem: 15036
+Epoch: [0]  [1380/2650]  eta: 0:10:40  lr: 5e-05  loss: 0.2047 (0.2896)  time: 0.5030  data: 0.0003  max mem: 15036
+Epoch: [0]  [1390/2650]  eta: 0:10:35  lr: 5e-05  loss: 0.2251 (0.2893)  time: 0.4993  data: 0.0003  max mem: 15036
+Epoch: [0]  [1400/2650]  eta: 0:10:30  lr: 5e-05  loss: 0.2445 (0.2890)  time: 0.5147  data: 0.0004  max mem: 15036
+Epoch: [0]  [1410/2650]  eta: 0:10:25  lr: 5e-05  loss: 0.2239 (0.2885)  time: 0.5225  data: 0.0004  max mem: 15036
+Epoch: [0]  [1420/2650]  eta: 0:10:20  lr: 5e-05  loss: 0.2400 (0.2884)  time: 0.5032  data: 0.0003  max mem: 15036
+Epoch: [0]  [1430/2650]  eta: 0:10:15  lr: 5e-05  loss: 0.2447 (0.2882)  time: 0.5001  data: 0.0003  max mem: 15036
+Epoch: [0]  [1440/2650]  eta: 0:10:10  lr: 5e-05  loss: 0.2356 (0.2878)  time: 0.5078  data: 0.0004  max mem: 15036
+Epoch: [0]  [1450/2650]  eta: 0:10:05  lr: 5e-05  loss: 0.2296 (0.2874)  time: 0.5126  data: 0.0008  max mem: 15036
+Epoch: [0]  [1460/2650]  eta: 0:10:00  lr: 5e-05  loss: 0.2296 (0.2872)  time: 0.5043  data: 0.0006  max mem: 15036
+Epoch: [0]  [1470/2650]  eta: 0:09:55  lr: 5e-05  loss: 0.2237 (0.2867)  time: 0.5028  data: 0.0003  max mem: 15036
+Epoch: [0]  [1480/2650]  eta: 0:09:50  lr: 5e-05  loss: 0.2237 (0.2865)  time: 0.5028  data: 0.0003  max mem: 15036
+Epoch: [0]  [1490/2650]  eta: 0:09:45  lr: 5e-05  loss: 0.2340 (0.2861)  time: 0.4969  data: 0.0003  max mem: 15036
+Epoch: [0]  [1500/2650]  eta: 0:09:40  lr: 5e-05  loss: 0.2382 (0.2861)  time: 0.5188  data: 0.0004  max mem: 15036
+Epoch: [0]  [1510/2650]  eta: 0:09:35  lr: 5e-05  loss: 0.2506 (0.2858)  time: 0.5153  data: 0.0003  max mem: 15036
+Epoch: [0]  [1520/2650]  eta: 0:09:30  lr: 5e-05  loss: 0.2425 (0.2855)  time: 0.5005  data: 0.0003  max mem: 15036
+Epoch: [0]  [1530/2650]  eta: 0:09:25  lr: 5e-05  loss: 0.2172 (0.2850)  time: 0.5024  data: 0.0004  max mem: 15036
+Epoch: [0]  [1540/2650]  eta: 0:09:19  lr: 5e-05  loss: 0.2331 (0.2852)  time: 0.5006  data: 0.0003  max mem: 15036
+Epoch: [0]  [1550/2650]  eta: 0:09:14  lr: 5e-05  loss: 0.2446 (0.2850)  time: 0.5007  data: 0.0004  max mem: 15036
+Epoch: [0]  [1560/2650]  eta: 0:09:09  lr: 5e-05  loss: 0.2445 (0.2847)  time: 0.4994  data: 0.0004  max mem: 15036
+Epoch: [0]  [1570/2650]  eta: 0:09:04  lr: 5e-05  loss: 0.2316 (0.2845)  time: 0.5027  data: 0.0003  max mem: 15036
+Epoch: [0]  [1580/2650]  eta: 0:08:59  lr: 5e-05  loss: 0.2121 (0.2841)  time: 0.5012  data: 0.0003  max mem: 15036
+Epoch: [0]  [1590/2650]  eta: 0:08:54  lr: 5e-05  loss: 0.2212 (0.2838)  time: 0.4987  data: 0.0003  max mem: 15036
+Epoch: [0]  [1600/2650]  eta: 0:08:49  lr: 5e-05  loss: 0.2285 (0.2835)  time: 0.5110  data: 0.0003  max mem: 15036
+Epoch: [0]  [1610/2650]  eta: 0:08:44  lr: 5e-05  loss: 0.2235 (0.2831)  time: 0.5123  data: 0.0003  max mem: 15036
+Epoch: [0]  [1620/2650]  eta: 0:08:39  lr: 5e-05  loss: 0.2074 (0.2827)  time: 0.5003  data: 0.0003  max mem: 15036
+Epoch: [0]  [1630/2650]  eta: 0:08:34  lr: 5e-05  loss: 0.1998 (0.2822)  time: 0.4994  data: 0.0003  max mem: 15036
+Epoch: [0]  [1640/2650]  eta: 0:08:29  lr: 5e-05  loss: 0.1951 (0.2817)  time: 0.4967  data: 0.0003  max mem: 15036
+Epoch: [0]  [1650/2650]  eta: 0:08:24  lr: 5e-05  loss: 0.1949 (0.2812)  time: 0.5018  data: 0.0003  max mem: 15036
+Epoch: [0]  [1660/2650]  eta: 0:08:19  lr: 5e-05  loss: 0.1898 (0.2808)  time: 0.5054  data: 0.0004  max mem: 15036
+Epoch: [0]  [1670/2650]  eta: 0:08:14  lr: 5e-05  loss: 0.2216 (0.2805)  time: 0.4983  data: 0.0003  max mem: 15036
+Epoch: [0]  [1680/2650]  eta: 0:08:09  lr: 5e-05  loss: 0.2125 (0.2800)  time: 0.5004  data: 0.0003  max mem: 15036
+Epoch: [0]  [1690/2650]  eta: 0:08:04  lr: 5e-05  loss: 0.1973 (0.2796)  time: 0.5052  data: 0.0003  max mem: 15036
+Epoch: [0]  [1700/2650]  eta: 0:07:59  lr: 5e-05  loss: 0.1865 (0.2791)  time: 0.5147  data: 0.0003  max mem: 15036
+Epoch: [0]  [1710/2650]  eta: 0:07:54  lr: 5e-05  loss: 0.2077 (0.2787)  time: 0.5102  data: 0.0003  max mem: 15036
+Epoch: [0]  [1720/2650]  eta: 0:07:49  lr: 5e-05  loss: 0.2181 (0.2784)  time: 0.4980  data: 0.0003  max mem: 15036
+Epoch: [0]  [1730/2650]  eta: 0:07:43  lr: 5e-05  loss: 0.2200 (0.2783)  time: 0.5003  data: 0.0003  max mem: 15036
+Epoch: [0]  [1740/2650]  eta: 0:07:38  lr: 5e-05  loss: 0.2344 (0.2781)  time: 0.5021  data: 0.0004  max mem: 15036
+Epoch: [0]  [1750/2650]  eta: 0:07:33  lr: 5e-05  loss: 0.2344 (0.2778)  time: 0.5008  data: 0.0004  max mem: 15036
+Epoch: [0]  [1760/2650]  eta: 0:07:28  lr: 5e-05  loss: 0.2199 (0.2775)  time: 0.5038  data: 0.0003  max mem: 15036
+Epoch: [0]  [1770/2650]  eta: 0:07:23  lr: 5e-05  loss: 0.2144 (0.2773)  time: 0.5110  data: 0.0003  max mem: 15036
+Epoch: [0]  [1780/2650]  eta: 0:07:18  lr: 5e-05  loss: 0.2144 (0.2770)  time: 0.5092  data: 0.0003  max mem: 15036
+Epoch: [0]  [1790/2650]  eta: 0:07:13  lr: 5e-05  loss: 0.2080 (0.2766)  time: 0.5055  data: 0.0008  max mem: 15036
+Epoch: [0]  [1800/2650]  eta: 0:07:08  lr: 5e-05  loss: 0.2045 (0.2762)  time: 0.5122  data: 0.0008  max mem: 15036
+Epoch: [0]  [1810/2650]  eta: 0:07:03  lr: 5e-05  loss: 0.2045 (0.2759)  time: 0.5095  data: 0.0003  max mem: 15036
+Epoch: [0]  [1820/2650]  eta: 0:06:58  lr: 5e-05  loss: 0.2152 (0.2757)  time: 0.4981  data: 0.0004  max mem: 15036
+Epoch: [0]  [1830/2650]  eta: 0:06:53  lr: 5e-05  loss: 0.2037 (0.2752)  time: 0.5062  data: 0.0004  max mem: 15036
+Epoch: [0]  [1840/2650]  eta: 0:06:48  lr: 5e-05  loss: 0.1833 (0.2748)  time: 0.5081  data: 0.0004  max mem: 15036
+Epoch: [0]  [1850/2650]  eta: 0:06:43  lr: 5e-05  loss: 0.1977 (0.2744)  time: 0.5019  data: 0.0004  max mem: 15036
+Epoch: [0]  [1860/2650]  eta: 0:06:38  lr: 5e-05  loss: 0.1699 (0.2739)  time: 0.5067  data: 0.0003  max mem: 15036
+Epoch: [0]  [1870/2650]  eta: 0:06:33  lr: 5e-05  loss: 0.1737 (0.2735)  time: 0.5025  data: 0.0004  max mem: 15036
+Epoch: [0]  [1880/2650]  eta: 0:06:28  lr: 5e-05  loss: 0.1770 (0.2730)  time: 0.4939  data: 0.0003  max mem: 15036
+Epoch: [0]  [1890/2650]  eta: 0:06:23  lr: 5e-05  loss: 0.1712 (0.2726)  time: 0.4970  data: 0.0003  max mem: 15036
+Epoch: [0]  [1900/2650]  eta: 0:06:18  lr: 5e-05  loss: 0.1638 (0.2721)  time: 0.5142  data: 0.0003  max mem: 15036
+Epoch: [0]  [1910/2650]  eta: 0:06:13  lr: 5e-05  loss: 0.1805 (0.2717)  time: 0.5141  data: 0.0003  max mem: 15036
+Epoch: [0]  [1920/2650]  eta: 0:06:08  lr: 5e-05  loss: 0.1967 (0.2714)  time: 0.4999  data: 0.0003  max mem: 15036
+Epoch: [0]  [1930/2650]  eta: 0:06:03  lr: 5e-05  loss: 0.1997 (0.2712)  time: 0.5041  data: 0.0003  max mem: 15036
+Epoch: [0]  [1940/2650]  eta: 0:05:58  lr: 5e-05  loss: 0.1834 (0.2707)  time: 0.5018  data: 0.0003  max mem: 15036
+Epoch: [0]  [1950/2650]  eta: 0:05:53  lr: 5e-05  loss: 0.1834 (0.2705)  time: 0.4977  data: 0.0003  max mem: 15036
+Epoch: [0]  [1960/2650]  eta: 0:05:47  lr: 5e-05  loss: 0.1818 (0.2701)  time: 0.4960  data: 0.0003  max mem: 15036
+Epoch: [0]  [1970/2650]  eta: 0:05:42  lr: 5e-05  loss: 0.1790 (0.2698)  time: 0.5008  data: 0.0003  max mem: 15036
+Epoch: [0]  [1980/2650]  eta: 0:05:37  lr: 5e-05  loss: 0.1933 (0.2694)  time: 0.5000  data: 0.0003  max mem: 15036
+Epoch: [0]  [1990/2650]  eta: 0:05:32  lr: 5e-05  loss: 0.1933 (0.2692)  time: 0.4915  data: 0.0003  max mem: 15036
+Epoch: [0]  [2000/2650]  eta: 0:05:27  lr: 5e-05  loss: 0.1982 (0.2690)  time: 0.5071  data: 0.0003  max mem: 15036
+Epoch: [0]  [2010/2650]  eta: 0:05:22  lr: 5e-05  loss: 0.1982 (0.2685)  time: 0.5081  data: 0.0003  max mem: 15036
+Epoch: [0]  [2020/2650]  eta: 0:05:17  lr: 5e-05  loss: 0.1879 (0.2682)  time: 0.4956  data: 0.0003  max mem: 15036
+Epoch: [0]  [2030/2650]  eta: 0:05:12  lr: 5e-05  loss: 0.2005 (0.2680)  time: 0.4973  data: 0.0003  max mem: 15036
+Epoch: [0]  [2040/2650]  eta: 0:05:07  lr: 5e-05  loss: 0.1994 (0.2677)  time: 0.4957  data: 0.0003  max mem: 15036
+Epoch: [0]  [2050/2650]  eta: 0:05:02  lr: 5e-05  loss: 0.2030 (0.2675)  time: 0.4987  data: 0.0003  max mem: 15036
+Epoch: [0]  [2060/2650]  eta: 0:04:57  lr: 5e-05  loss: 0.2180 (0.2674)  time: 0.5059  data: 0.0003  max mem: 15036
+Epoch: [0]  [2070/2650]  eta: 0:04:52  lr: 5e-05  loss: 0.1885 (0.2671)  time: 0.5002  data: 0.0003  max mem: 15036
+Epoch: [0]  [2080/2650]  eta: 0:04:47  lr: 5e-05  loss: 0.1775 (0.2669)  time: 0.4986  data: 0.0003  max mem: 15036
+Epoch: [0]  [2090/2650]  eta: 0:04:42  lr: 5e-05  loss: 0.1825 (0.2665)  time: 0.4990  data: 0.0003  max mem: 15036
+Epoch: [0]  [2100/2650]  eta: 0:04:37  lr: 5e-05  loss: 0.1974 (0.2663)  time: 0.5127  data: 0.0003  max mem: 15036
+Epoch: [0]  [2110/2650]  eta: 0:04:32  lr: 5e-05  loss: 0.1998 (0.2660)  time: 0.5133  data: 0.0003  max mem: 15036
+Epoch: [0]  [2120/2650]  eta: 0:04:27  lr: 5e-05  loss: 0.2015 (0.2657)  time: 0.4987  data: 0.0003  max mem: 15036
+Epoch: [0]  [2130/2650]  eta: 0:04:22  lr: 5e-05  loss: 0.2015 (0.2654)  time: 0.4998  data: 0.0003  max mem: 15036
+Epoch: [0]  [2140/2650]  eta: 0:04:17  lr: 5e-05  loss: 0.1824 (0.2652)  time: 0.4954  data: 0.0003  max mem: 15036
+Epoch: [0]  [2150/2650]  eta: 0:04:12  lr: 5e-05  loss: 0.1998 (0.2649)  time: 0.5024  data: 0.0003  max mem: 15036
+Epoch: [0]  [2160/2650]  eta: 0:04:07  lr: 5e-05  loss: 0.2005 (0.2647)  time: 0.5126  data: 0.0005  max mem: 15036
+Epoch: [0]  [2170/2650]  eta: 0:04:01  lr: 5e-05  loss: 0.1924 (0.2644)  time: 0.5041  data: 0.0005  max mem: 15036
+Epoch: [0]  [2180/2650]  eta: 0:03:56  lr: 5e-05  loss: 0.1870 (0.2641)  time: 0.4966  data: 0.0003  max mem: 15036
+Epoch: [0]  [2190/2650]  eta: 0:03:51  lr: 5e-05  loss: 0.1897 (0.2638)  time: 0.4995  data: 0.0003  max mem: 15036
+Epoch: [0]  [2200/2650]  eta: 0:03:46  lr: 5e-05  loss: 0.1998 (0.2636)  time: 0.5157  data: 0.0003  max mem: 15036
+Epoch: [0]  [2210/2650]  eta: 0:03:41  lr: 5e-05  loss: 0.1920 (0.2634)  time: 0.5143  data: 0.0003  max mem: 15036
+Epoch: [0]  [2220/2650]  eta: 0:03:36  lr: 5e-05  loss: 0.1839 (0.2631)  time: 0.4985  data: 0.0005  max mem: 15036
+Epoch: [0]  [2230/2650]  eta: 0:03:31  lr: 5e-05  loss: 0.1788 (0.2627)  time: 0.4982  data: 0.0005  max mem: 15036
+Epoch: [0]  [2240/2650]  eta: 0:03:26  lr: 5e-05  loss: 0.1912 (0.2625)  time: 0.4965  data: 0.0003  max mem: 15036
+Epoch: [0]  [2250/2650]  eta: 0:03:21  lr: 5e-05  loss: 0.2316 (0.2624)  time: 0.5022  data: 0.0003  max mem: 15036
+Epoch: [0]  [2260/2650]  eta: 0:03:16  lr: 5e-05  loss: 0.2061 (0.2620)  time: 0.5041  data: 0.0004  max mem: 15036
+Epoch: [0]  [2270/2650]  eta: 0:03:11  lr: 5e-05  loss: 0.1751 (0.2618)  time: 0.5039  data: 0.0004  max mem: 15036
+Epoch: [0]  [2280/2650]  eta: 0:03:06  lr: 5e-05  loss: 0.1907 (0.2616)  time: 0.5006  data: 0.0004  max mem: 15036
+Epoch: [0]  [2290/2650]  eta: 0:03:01  lr: 5e-05  loss: 0.2320 (0.2615)  time: 0.4977  data: 0.0003  max mem: 15036
+Epoch: [0]  [2300/2650]  eta: 0:02:56  lr: 5e-05  loss: 0.2131 (0.2613)  time: 0.5172  data: 0.0004  max mem: 15036
+Epoch: [0]  [2310/2650]  eta: 0:02:51  lr: 5e-05  loss: 0.2116 (0.2612)  time: 0.5196  data: 0.0005  max mem: 15036
+Epoch: [0]  [2320/2650]  eta: 0:02:46  lr: 5e-05  loss: 0.2033 (0.2609)  time: 0.5077  data: 0.0005  max mem: 15036
+Epoch: [0]  [2330/2650]  eta: 0:02:41  lr: 5e-05  loss: 0.1771 (0.2606)  time: 0.5073  data: 0.0006  max mem: 15036
+Epoch: [0]  [2340/2650]  eta: 0:02:36  lr: 5e-05  loss: 0.1757 (0.2603)  time: 0.5022  data: 0.0004  max mem: 15036
+Epoch: [0]  [2350/2650]  eta: 0:02:31  lr: 5e-05  loss: 0.1784 (0.2599)  time: 0.5052  data: 0.0005  max mem: 15036
+Epoch: [0]  [2360/2650]  eta: 0:02:26  lr: 5e-05  loss: 0.1784 (0.2596)  time: 0.5032  data: 0.0005  max mem: 15036
+Epoch: [0]  [2370/2650]  eta: 0:02:21  lr: 5e-05  loss: 0.1739 (0.2593)  time: 0.4949  data: 0.0003  max mem: 15036
+Epoch: [0]  [2380/2650]  eta: 0:02:16  lr: 5e-05  loss: 0.1828 (0.2590)  time: 0.4980  data: 0.0003  max mem: 15036
+Epoch: [0]  [2390/2650]  eta: 0:02:11  lr: 5e-05  loss: 0.1968 (0.2589)  time: 0.4975  data: 0.0003  max mem: 15036
+Epoch: [0]  [2400/2650]  eta: 0:02:06  lr: 5e-05  loss: 0.1850 (0.2586)  time: 0.5045  data: 0.0003  max mem: 15036
+Epoch: [0]  [2410/2650]  eta: 0:02:00  lr: 5e-05  loss: 0.1915 (0.2584)  time: 0.5068  data: 0.0003  max mem: 15036
+Epoch: [0]  [2420/2650]  eta: 0:01:55  lr: 5e-05  loss: 0.1915 (0.2580)  time: 0.4966  data: 0.0008  max mem: 15036
+Epoch: [0]  [2430/2650]  eta: 0:01:50  lr: 5e-05  loss: 0.1573 (0.2577)  time: 0.4931  data: 0.0008  max mem: 15036
+Epoch: [0]  [2440/2650]  eta: 0:01:45  lr: 5e-05  loss: 0.1880 (0.2576)  time: 0.4929  data: 0.0003  max mem: 15036
+Epoch: [0]  [2450/2650]  eta: 0:01:40  lr: 5e-05  loss: 0.1852 (0.2572)  time: 0.4983  data: 0.0003  max mem: 15036
+Epoch: [0]  [2460/2650]  eta: 0:01:35  lr: 5e-05  loss: 0.1804 (0.2570)  time: 0.4983  data: 0.0003  max mem: 15036
+Epoch: [0]  [2470/2650]  eta: 0:01:30  lr: 5e-05  loss: 0.1842 (0.2568)  time: 0.4941  data: 0.0003  max mem: 15036
+Epoch: [0]  [2480/2650]  eta: 0:01:25  lr: 5e-05  loss: 0.1837 (0.2566)  time: 0.4940  data: 0.0003  max mem: 15036
+Epoch: [0]  [2490/2650]  eta: 0:01:20  lr: 5e-05  loss: 0.1966 (0.2564)  time: 0.4993  data: 0.0004  max mem: 15036
+Epoch: [0]  [2500/2650]  eta: 0:01:15  lr: 5e-05  loss: 0.1948 (0.2561)  time: 0.5160  data: 0.0004  max mem: 15036
+Epoch: [0]  [2510/2650]  eta: 0:01:10  lr: 5e-05  loss: 0.1677 (0.2558)  time: 0.5110  data: 0.0003  max mem: 15036
+Epoch: [0]  [2520/2650]  eta: 0:01:05  lr: 5e-05  loss: 0.1674 (0.2555)  time: 0.4965  data: 0.0003  max mem: 15036
+Epoch: [0]  [2530/2650]  eta: 0:01:00  lr: 5e-05  loss: 0.1674 (0.2553)  time: 0.5011  data: 0.0003  max mem: 15036
+Epoch: [0]  [2540/2650]  eta: 0:00:55  lr: 5e-05  loss: 0.1634 (0.2549)  time: 0.5041  data: 0.0003  max mem: 15036
+Epoch: [0]  [2550/2650]  eta: 0:00:50  lr: 5e-05  loss: 0.1576 (0.2547)  time: 0.5063  data: 0.0003  max mem: 15036
+Epoch: [0]  [2560/2650]  eta: 0:00:45  lr: 5e-05  loss: 0.1886 (0.2545)  time: 0.5051  data: 0.0004  max mem: 15036
+Epoch: [0]  [2570/2650]  eta: 0:00:40  lr: 5e-05  loss: 0.1851 (0.2542)  time: 0.4973  data: 0.0004  max mem: 15036
+Epoch: [0]  [2580/2650]  eta: 0:00:35  lr: 5e-05  loss: 0.1817 (0.2540)  time: 0.5052  data: 0.0003  max mem: 15036
+Epoch: [0]  [2590/2650]  eta: 0:00:30  lr: 5e-05  loss: 0.1876 (0.2538)  time: 0.5089  data: 0.0010  max mem: 15036
+Epoch: [0]  [2600/2650]  eta: 0:00:25  lr: 5e-05  loss: 0.2018 (0.2536)  time: 0.5231  data: 0.0012  max mem: 15036
+Epoch: [0]  [2610/2650]  eta: 0:00:20  lr: 5e-05  loss: 0.1921 (0.2534)  time: 0.5200  data: 0.0005  max mem: 15036
+Epoch: [0]  [2620/2650]  eta: 0:00:15  lr: 5e-05  loss: 0.1735 (0.2531)  time: 0.4996  data: 0.0003  max mem: 15036
+Epoch: [0]  [2630/2650]  eta: 0:00:10  lr: 5e-05  loss: 0.1689 (0.2530)  time: 0.5050  data: 0.0003  max mem: 15036
+Epoch: [0]  [2640/2650]  eta: 0:00:05  lr: 5e-05  loss: 0.1765 (0.2527)  time: 0.5011  data: 0.0005  max mem: 15036
+Epoch: [0] Total time: 0:22:15
+Test:  [   0/3811]  eta: 0:55:31    time: 0.8742  data: 0.6493  max mem: 15036
+Test:  [ 100/3811]  eta: 0:03:35    time: 0.0494  data: 0.0015  max mem: 15036
+Test:  [ 200/3811]  eta: 0:03:18    time: 0.0488  data: 0.0014  max mem: 15036
+Test:  [ 300/3811]  eta: 0:03:14    time: 0.0532  data: 0.0015  max mem: 15036
+Test:  [ 400/3811]  eta: 0:03:09    time: 0.0514  data: 0.0015  max mem: 15036

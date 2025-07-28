@@ -1,2 +1,10 @@
 /pretrained_weights
-/refer/data/images
+/refer/data
+/bert/models
+/models/output
+
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.pkl

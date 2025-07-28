@@ -1,27 +1,30 @@
 import datetime
+from torch.cuda.amp import autocast, GradScaler
 import os
 import time
-
 import torch
 import torch.utils.data
 from torch import nn
-
 from functools import reduce
 import operator
 from bert.modeling_bert import BertModel
-
 import torchvision
 from lib import segmentation
-
 import transforms as T
 import utils
 import numpy as np
-
 import torch.nn.functional as F
-
 import gc
 from collections import OrderedDict
 
+# ----------------------- 重要修改开始 -----------------------
+# 我们不再通过 argparse 从命令行获取 local_rank
+# 而是在 main() 函数中从环境变量读取
+def get_args_parser():
+    parser = get_parser()  # 假设 get_parser() 来自你的 args.py
+    # 注意：这里不再添加 --local_rank 参数
+    return parser
+# ----------------------- 重要修改结束 -----------------------
 
 def get_dataset(image_set, transform, args):
     from data.dataset_refer_bert import ReferDataset
@@ -31,38 +34,29 @@ def get_dataset(image_set, transform, args):
                       target_transforms=None
                       )
     num_classes = 2
-
     return ds, num_classes
-
 
 # IoU calculation for validation
 def IoU(pred, gt):
     pred = pred.argmax(1)
-
     intersection = torch.sum(torch.mul(pred, gt))
     union = torch.sum(torch.add(pred, gt)) - intersection
-
     if intersection == 0 or union == 0:
         iou = 0
     else:
         iou = float(intersection) / float(union)
-
     return iou, intersection, union
-
 
 def get_transform(args):
     transforms = [T.Resize(args.img_size, args.img_size),
                   T.ToTensor(),
                   T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
                   ]
-
     return T.Compose(transforms)
-
 
 def criterion(input, target):
     weight = torch.FloatTensor([0.9, 1.1]).cuda()
     return nn.functional.cross_entropy(input, target, weight=weight)
-
 
 def evaluate(model, data_loader, bert_model):
     model.eval()
@@ -70,14 +64,12 @@ def evaluate(model, data_loader, bert_model):
     header = 'Test:'
     total_its = 0
     acc_ious = 0
-
     # evaluation variables
     cum_I, cum_U = 0, 0
     eval_seg_iou_list = [.5, .6, .7, .8, .9]
     seg_correct = np.zeros(len(eval_seg_iou_list), dtype=np.int32)
     seg_total = 0
     mean_IoU = []
-
     with torch.no_grad():
         for data in metric_logger.log_every(data_loader, 100, header):
             total_its += 1
@@ -86,10 +78,8 @@ def evaluate(model, data_loader, bert_model):
                                                    target.cuda(non_blocking=True),\
                                                    sentences.cuda(non_blocking=True),\
                                                    attentions.cuda(non_blocking=True)
-
             sentences = sentences.squeeze(1)
             attentions = attentions.squeeze(1)
-
             if bert_model is not None:
                 last_hidden_states = bert_model(sentences, attention_mask=attentions)[0]
                 embedding = last_hidden_states.permute(0, 2, 1)  # (B, 768, N_l) to make Conv1d happy
@@ -97,7 +87,6 @@ def evaluate(model, data_loader, bert_model):
                 output = model(image, embedding, l_mask=attentions)
             else:
                 output = model(image, sentences, l_mask=attentions)
-
             iou, I, U = IoU(output, target)
             acc_ious += iou
             mean_IoU.append(iou)
@@ -108,7 +97,6 @@ def evaluate(model, data_loader, bert_model):
                 seg_correct[n_eval_iou] += (iou >= eval_seg_iou)
             seg_total += 1
         iou = acc_ious / total_its
-
     mean_IoU = np.array(mean_IoU)
     mIoU = np.mean(mean_IoU)
     print('Final results:')
@@ -119,19 +107,17 @@ def evaluate(model, data_loader, bert_model):
                        (str(eval_seg_iou_list[n_eval_iou]), seg_correct[n_eval_iou] * 100. / seg_total)
     results_str += '    overall IoU = %.2f\n' % (cum_I * 100. / cum_U)
     print(results_str)
-
     return 100 * iou, 100 * cum_I / cum_U
-
 
 def train_one_epoch(model, criterion, optimizer, data_loader, lr_scheduler, epoch, print_freq,
                     iterations, bert_model):
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
+    scaler = GradScaler()
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value}'))
     header = 'Epoch: [{}]'.format(epoch)
     train_loss = 0
     total_its = 0
-
     for data in metric_logger.log_every(data_loader, print_freq, header):
         total_its += 1
         image, target, sentences, attentions = data
@@ -139,38 +125,39 @@ def train_one_epoch(model, criterion, optimizer, data_loader, lr_scheduler, epoc
                                                target.cuda(non_blocking=True),\
                                                sentences.cuda(non_blocking=True),\
                                                attentions.cuda(non_blocking=True)
-
         sentences = sentences.squeeze(1)
         attentions = attentions.squeeze(1)
-
-        if bert_model is not None:
-            last_hidden_states = bert_model(sentences, attention_mask=attentions)[0]  # (6, 10, 768)
-            embedding = last_hidden_states.permute(0, 2, 1)  # (B, 768, N_l) to make Conv1d happy
-            attentions = attentions.unsqueeze(dim=-1)  # (batch, N_l, 1)
-            output = model(image, embedding, l_mask=attentions)
-        else:
-            output = model(image, sentences, l_mask=attentions)
-
-        loss = criterion(output, target)
+        with autocast():
+            if bert_model is not None:
+                last_hidden_states = bert_model(sentences, attention_mask=attentions)[0]
+                embedding = last_hidden_states.permute(0, 2, 1)
+                attentions = attentions.unsqueeze(dim=-1)
+                output = model(image, embedding, l_mask=attentions)
+            else:
+                output = model(image, sentences, l_mask=attentions)
+            loss = criterion(output, target)
+            # 使用 scaler 进行反向传播
         optimizer.zero_grad()  # set_to_none=True is only available in pytorch 1.6+
-        loss.backward()
-        optimizer.step()
-        lr_scheduler.step()
-
-        torch.cuda.synchronize()
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
+        # loss.backward()
+        # optimizer.step()
+        # lr_scheduler.step()
+        # torch.cuda.synchronize()
         train_loss += loss.item()
         iterations += 1
         metric_logger.update(loss=loss.item(), lr=optimizer.param_groups[0]["lr"])
-
         del image, target, sentences, attentions, loss, output, data
         if bert_model is not None:
             del last_hidden_states, embedding
-
-        gc.collect()
-        torch.cuda.empty_cache()
-        torch.cuda.synchronize()
-
-
+        # gc.collect()
+        # torch.cuda.empty_cache()
+        # torch.cuda.synchronize()
+        torch.distributed.barrier()  # synchronize all processes
+        if total_its % 100 == 0:
+            torch.cuda.empty_cache()
+# 
 def main(args):
     dataset, num_classes = get_dataset("train",
                                        get_transform(args=args),
@@ -188,10 +175,15 @@ def main(args):
     test_sampler = torch.utils.data.SequentialSampler(dataset_test)
 
     # data loader
+    print("Building data loader...")
+    print("batch size: {}".format(args.batch_size))
+    print("number of workers: {}".format(args.workers))
+    print("pin memory: {}".format(args.pin_mem))
+    print("number of training samples: {}".format(len(dataset)))
+    print("number of validation samples: {}".format(len(dataset_test)))
     data_loader = torch.utils.data.DataLoader(
         dataset, batch_size=args.batch_size,
-        sampler=train_sampler, num_workers=args.workers, pin_memory=args.pin_mem, drop_last=True)
-
+        sampler=train_sampler, num_workers=args.workers, pin_memory=args.pin_mem, drop_last=True, persistent_workers=True)
     data_loader_test = torch.utils.data.DataLoader(
         dataset_test, batch_size=1, sampler=test_sampler, num_workers=args.workers)
 
@@ -283,7 +275,6 @@ def main(args):
         train_one_epoch(model, criterion, optimizer, data_loader, lr_scheduler, epoch, args.print_freq,
                         iterations, bert_model)
         iou, overallIoU = evaluate(model, data_loader_test, bert_model)
-
         print('Average object IoU {}'.format(iou))
         print('Overall IoU {}'.format(overallIoU))
         save_checkpoint = (best_oIoU < overallIoU)
@@ -297,7 +288,6 @@ def main(args):
                 dict_to_save = {'model': single_model.state_dict(),
                                 'optimizer': optimizer.state_dict(), 'epoch': epoch, 'args': args,
                                 'lr_scheduler': lr_scheduler.state_dict()}
-
             utils.save_on_master(dict_to_save, os.path.join(args.output_dir,
                                                             'model_best_{}.pth'.format(args.model_id)))
             best_oIoU = overallIoU
@@ -307,12 +297,20 @@ def main(args):
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     print('Training time {}'.format(total_time_str))
 
-
+    
 if __name__ == "__main__":
     from args import get_parser
     parser = get_parser()
     args = parser.parse_args()
+
+    # ----------------------- 关键修复：必须在 init_distributed_mode 之前 -----------------------
+    import os
+    # 从环境变量获取 LOCAL_RANK 并赋值给 args.local_rank
+    args.local_rank = int(os.environ.get('LOCAL_RANK', 0))
+    # -----------------------------------------------------------------------------------
+
     # set up distributed learning
+    # 这个函数内部会调用 torch.cuda.set_device(args.local_rank)
     utils.init_distributed_mode(args)
     print('Image size: {}'.format(str(args.img_size)))
     main(args)

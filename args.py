@@ -24,7 +24,7 @@ def get_parser():
     parser.add_argument('--model', default='lavt', help='model: lavt, lavt_one')
     parser.add_argument('--model_id', default='lavt', help='name to identify the model')
     parser.add_argument('--output-dir', default='./checkpoints/', help='path where to save checkpoint weights')
-    parser.add_argument('--pin_mem', action='store_true',
+    parser.add_argument('--pin_mem', default=True,
                         help='If true, pin memory when using the data loader.')
     parser.add_argument('--pretrained_swin_weights', default='',
                         help='path to pre-trained Swin backbone weights')
