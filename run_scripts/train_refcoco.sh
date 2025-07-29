@@ -1,7 +1,7 @@
 #!/bin/bash
 mkdir -p ./models/refcoco
 
-gpu="0,6"
+gpu="0,1,2,3"
 export CUDA_VISIBLE_DEVICES=$gpu
 np=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n' | wc -l)
 
@@ -12,7 +12,7 @@ torchrun \
     --model lavt \
     --dataset refcoco \
     --model_id refcoco \
-    --batch-size 10 \
+    --batch-size 8 \
     --lr 0.00005 \
     --workers 8 \
     --wd 1e-2 \

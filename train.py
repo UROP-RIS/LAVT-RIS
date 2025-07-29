@@ -80,13 +80,14 @@ def evaluate(model, data_loader, bert_model):
                                                    attentions.cuda(non_blocking=True)
             sentences = sentences.squeeze(1)
             attentions = attentions.squeeze(1)
-            if bert_model is not None:
-                last_hidden_states = bert_model(sentences, attention_mask=attentions)[0]
-                embedding = last_hidden_states.permute(0, 2, 1)  # (B, 768, N_l) to make Conv1d happy
-                attentions = attentions.unsqueeze(dim=-1)  # (B, N_l, 1)
-                output = model(image, embedding, l_mask=attentions)
-            else:
-                output = model(image, sentences, l_mask=attentions)
+            with torch.no_grad():
+                if bert_model is not None:
+                    last_hidden_states = bert_model(sentences, attention_mask=attentions)[0]
+                    embedding = last_hidden_states.permute(0, 2, 1)  # (B, 768, N_l) to make Conv1d happy
+                    attentions = attentions.unsqueeze(dim=-1)  # (B, N_l, 1)
+                    output = model(image, embedding, l_mask=attentions)
+                else:
+                    output = model(image, sentences, l_mask=attentions)
             iou, I, U = IoU(output, target)
             acc_ious += iou
             mean_IoU.append(iou)
@@ -143,7 +144,7 @@ def train_one_epoch(model, criterion, optimizer, data_loader, lr_scheduler, epoc
         scaler.update()
         # loss.backward()
         # optimizer.step()
-        # lr_scheduler.step()
+        lr_scheduler.step()
         # torch.cuda.synchronize()
         train_loss += loss.item()
         iterations += 1
