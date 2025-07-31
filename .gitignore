@@ -1,7 +1,7 @@
 /pretrained_weights
 /refer/data
 /bert/models
-/models/output
+/models/refcoco
 
 __pycache__
 *.pyc
@@ -9,7 +9,7 @@ __pycache__
 *.pyd
 *.pkl
 *.pth
-/models/output
+/models/refcoco
 /demo
 *.json
 /augmentation/data

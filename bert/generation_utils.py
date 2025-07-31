@@ -50,9 +50,9 @@ class GenerationMixin:
             for previous_token in set(prev_output_tokens[i].tolist()):
                 # if score < 0 then repetition penalty has to multiplied to reduce the previous token probability
                 if lprobs[i, previous_token] < 0:
-                    lprobs[i, previous_token] *= repetition_penalty
+                    lprobs[i, previous_token] = lprobs[i, previous_token] * repetition_penalty
                 else:
-                    lprobs[i, previous_token] /= repetition_penalty
+                    lprobs[i, previous_token] = lprobs[i, previous_token] / repetition_penalty
 
     def postprocess_next_token_scores(
         self,

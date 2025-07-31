@@ -16,7 +16,8 @@ class PseudoLabelDataset(data.Dataset):
     def __init__(self, image_transforms, root: str = "/data/datasets/tzhangbu/Cherry-Pick/data/refcoco", 
                  dataset: str = "unc", 
                  split = "train", 
-                 max_tokens=20):
+                 max_tokens=20,
+                 augment_text_root="augmentation/data/unc/train"):
         self.root = root
         self.dataset = dataset
         self.split = split
@@ -24,6 +25,7 @@ class PseudoLabelDataset(data.Dataset):
         self.index_root = f"{self.root}/{self.dataset}/{self.split}_pseudo_score"
         self.image_txt_gt_root = f"{self.root}/{self.dataset}/{self.split}_batch"
         self.mask_root = f"{self.root}/{self.dataset}/{self.split}_mask_newB_batch"
+        self.augment_text_root = augment_text_root
     
         # Read and sort JSON files by number at the end of filename
         json_files = [f for f in os.listdir(self.index_root) if f.endswith('.json')]
@@ -54,6 +56,18 @@ class PseudoLabelDataset(data.Dataset):
         data_dict = {key: img_txt_gt[key] for key in img_txt_gt}
         img = data_dict['im_batch']
         txt = data_dict['sent_batch'][0]
+        
+        ## Augment text
+        augment_text_path = os.path.join(self.augment_text_root, f"{self.dataset}_{self.split}_augtext_{idx}.json")
+        aug_data = json.load(open(augment_text_path, 'r'))
+        aug_text_keys = list(aug_data.keys())[1:]
+        if aug_text_keys is None or len(aug_text_keys) == 0:
+            aug_txt = txt  # Fallback to original text if no augmented texts are available
+        else:
+            ## Random select one of the augmented texts
+            selected = np.random.choice(list(aug_text_keys))
+            aug_txt = aug_data[selected]
+        
         mask_path = os.path.join(self.mask_root, mask_file_name)
         mask_candidates = json.load(open(mask_path, 'r'))["annotation"]
         rle_mask = mask_candidates[predicted_mask_id]["rle"]
@@ -62,16 +76,26 @@ class PseudoLabelDataset(data.Dataset):
         img = Image.fromarray(img.astype(np.uint8)).convert("RGB")
         img, target = self.image_transforms(img, mask)
         
-        padded_input_ids = [0] * self.max_tokens
-        input_ids = self.tokenizer.encode(txt, add_special_tokens=True)
-        input_ids = input_ids[:self.max_tokens]  # Truncate to max_token
-        padded_input_ids[:len(input_ids)] = input_ids
-        padded_input_ids = torch.tensor(padded_input_ids, dtype=torch.long)
-        padded_input_ids = padded_input_ids.unsqueeze(0)
-        attention_mask = [1] * len(input_ids) + [0] * (self.max_tokens - len(input_ids))
-        attention_mask = torch.tensor(attention_mask, dtype=torch.long).unsqueeze(0)
+        padded_input_ids, attention_mask = self.tokenize_text(txt)
+        aug_padded_input_ids, aug_attention_mask = self.tokenize_text(aug_txt)
+        return img, target, padded_input_ids, attention_mask, aug_padded_input_ids, aug_attention_mask
+    
+    def tokenize_text(self, text: str) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Tokenize the input text and return padded input IDs and attention mask.
         
-        return img, target, padded_input_ids, attention_mask
+        Args:
+            text (str): Input text to tokenize.
+        
+        Returns:
+            tuple: Padded input IDs and attention mask as tensors.
+        """
+        encoded = self.tokenizer.encode(text, add_special_tokens=True)
+        padding_length = self.max_tokens - len(encoded)
+        padded_ids = encoded + [0] * padding_length
+        attention_mask = [1] * len(encoded) + [0] * padding_length
+        
+        return torch.tensor(padded_ids).unsqueeze(0), torch.tensor(attention_mask).unsqueeze(0)
         
 
 def get_dataset(root: str, dataset: str, split: str, image_transforms=None, max_tokens=20):
@@ -106,9 +130,9 @@ if __name__ == "__main__":
         max_tokens=20
     )
     print(f"Dataset length: {len(dataset)}")
-    item = dataset[0]
+    item = dataset[10]
     
-    print(f"Image shape: {item[0].shape}, Target shape: {item[1].shape}, Input IDs: {item[2].shape}, Attention Mask: {item[3].shape}")
+    print(f"Image shape: {item[0].shape}, Target shape: {item[1].shape}, Input IDs: {item[2].shape}, Attention Mask: {item[3].shape}, Augmented Input IDs: {item[4].shape}, Augmented Attention Mask: {item[5].shape}")
 
         
 

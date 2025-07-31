@@ -711,5 +711,5 @@ class SpatialImageLanguageAttention(nn.Module):
         out = out.permute(0, 2, 1)  # (B, value_channels, HW)
         out = self.W(out)  # (B, value_channels, HW)
         out = out.permute(0, 2, 1)  # (B, HW, value_channels)
-
+        
         return out
