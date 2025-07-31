@@ -10,3 +10,6 @@ __pycache__
 *.pkl
 *.pth
 /models/output
+/demo
+*.json
+/augmentation/data

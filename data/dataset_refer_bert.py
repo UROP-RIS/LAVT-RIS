@@ -119,3 +119,23 @@ class ReferDataset(data.Dataset):
             attention_mask = self.attention_masks[index][choice_sent]
 
         return img, target, tensor_embeddings, attention_mask
+    
+import sys
+import transforms as T
+    
+
+def get_transform():
+    transforms = [T.Resize(480, 480),
+                  T.ToTensor(),
+                  T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+                  ]
+
+    return T.Compose(transforms)
+
+if __name__ == "__main__":
+    # Example usage
+    dataset = ReferDataset(args, split='train', eval_mode=False, image_transforms=get_transform())
+    print(f"Number of samples in dataset: {len(dataset)}")
+    img, target, embeddings, attention_mask = dataset[0]
+    print(f"Image size: {img.shape}, Target size: {target.shape}, Embeddings shape: {embeddings.shape}, Attention mask shape: {attention_mask.shape}")
+
