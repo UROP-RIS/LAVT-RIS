@@ -110,7 +110,7 @@ def evaluate(model, data_loader, bert_model):
     return 100 * iou, 100 * cum_I / cum_U
 
 def train_one_epoch(model, criterion, optimizer, data_loader, lr_scheduler, epoch, print_freq,
-                    iterations, bert_model, lambda_consistency=0.2):
+                    iterations, bert_model, lambda_consistency=1.0):
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
     scaler = GradScaler()
