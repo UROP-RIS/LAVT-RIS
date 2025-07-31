@@ -15,8 +15,8 @@ import numpy as np
 # ================================
 # 1. 配置参数
 # ================================
-image_path = 'demo/crowds.jpg'
-sentence = 'the smallest person on the right'
+image_path = 'demo/station.jpg'
+sentence = 'leftmost man'
 weights = './checkpoints/model_best_refcoco.pth'
 # weights = "./checkpoints/refcoco_4cards.pth"
 device = 'cuda:0'

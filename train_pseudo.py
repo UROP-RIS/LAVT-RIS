@@ -110,116 +110,70 @@ def evaluate(model, data_loader, bert_model):
     return 100 * iou, 100 * cum_I / cum_U
 
 def train_one_epoch(model, criterion, optimizer, data_loader, lr_scheduler, epoch, print_freq,
-                    iterations, bert_model, lambda_consistency=1.0):
-    """
-    训练一个epoch的函数。
-
-    Args:
-        model: 待训练的模型。
-        criterion: 原始标签的损失函数（如交叉熵）。
-        optimizer: 优化器。
-        data_loader: 数据加载器。
-        lr_scheduler: 学习率调度器。
-        epoch: 当前epoch。
-        print_freq: 日志打印频率。
-        iterations: 迭代次数计数器。
-        bert_model: BERT模型（可选）。
-        lambda_consistency: 一致性损失的权重系数。
-
-    Returns:
-        train_loss: 该epoch的平均总损失。
-        iterations: 更新后的迭代次数。
-    """
+                    iterations, bert_model, lambda_consistency=0.2):
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
     scaler = GradScaler()
-    # 添加用于记录损失的meter
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value}'))
-    metric_logger.add_meter('label_loss', utils.SmoothedValue(window_size=20, fmt='{value:.4f}'))  # 平滑显示
+    metric_logger.add_meter('label_loss', utils.SmoothedValue(window_size=20, fmt='{value:.4f}'))
     metric_logger.add_meter('consistent_loss', utils.SmoothedValue(window_size=20, fmt='{value:.4f}'))
     header = 'Epoch: [{}]'.format(epoch)
-    train_loss = 0
-    total_its = 0
-
-    # 实例化一致性损失函数
     consistent_loss_fn = ConsistentDiceLoss(smooth=1.0)
 
     for data in metric_logger.log_every(data_loader, print_freq, header):
-        total_its += 1
-        # 解包数据
         image, target, sentences, attentions, aug_sentences, aug_attentions = data
-        # 转移到GPU
-        image, target, sentences, attentions, aug_sentences, aug_attentions = (
-            image.cuda(non_blocking=True),
-            target.cuda(non_blocking=True),
-            sentences.cuda(non_blocking=True),
-            attentions.cuda(non_blocking=True),
-            aug_sentences.cuda(non_blocking=True),
-            aug_attentions.cuda(non_blocking=True)
-        )
-        # 去除多余的维度
-        sentences = sentences.squeeze(1)
-        attentions = attentions.squeeze(1)
-        aug_sentences = aug_sentences.squeeze(1)
-        aug_attentions = aug_attentions.squeeze(1)
-        
+        image = image.cuda(non_blocking=True)
+        target = target.cuda(non_blocking=True)
+        sentences = sentences.cuda(non_blocking=True).squeeze(1)
+        attentions = attentions.cuda(non_blocking=True).squeeze(1)
+        aug_sentences = aug_sentences.cuda(non_blocking=True).squeeze(1)
+        aug_attentions = aug_attentions.cuda(non_blocking=True).squeeze(1)
+
         with autocast():
             if bert_model is not None:
-                # 使用BERT编码原始文本
-                last_hidden_states = bert_model(sentences, attention_mask=attentions)[0]
-                embedding = last_hidden_states.permute(0, 2, 1)  # [B, C, L]
-                attentions = attentions.unsqueeze(dim=-1)  # [B, L, 1]
-                image_aug = image.clone().detach() 
-                # 原始输入的模型输出
-                output = model(image, embedding, l_mask=attentions)
+                bert_model.eval()
+                model.eval()
+                for param in model.parameters():
+                    param.requires_grad = False
+                for param in bert_model.parameters():
+                    param.requires_grad = False
+                with torch.no_grad():  # 可选：freeze BERT
+                    last_hidden_states = bert_model(sentences, attention_mask=attentions)[0].detach()
+                    embedding = last_hidden_states.permute(0, 2, 1)
+                    l_mask = attentions.unsqueeze(-1)
 
-                # 使用BERT编码增强文本
+                    # 教师输出（原始输入）
+                    output_teacher = model(image, embedding, l_mask=l_mask).detach()
+
+                for param in model.parameters():
+                    param.requires_grad = True
+                for param in bert_model.parameters():
+                    param.requires_grad = True
+                bert_model.train()
+                model.train()  # 恢复模型训练模式
+                # 学生输出（增强输入）
                 aug_last_hidden_states = bert_model(aug_sentences, attention_mask=aug_attentions)[0]
-                aug_embedding = aug_last_hidden_states.permute(0, 2, 1)  # [B, C, L]
-                aug_attentions = aug_attentions.unsqueeze(dim=-1).clone()  # [B, L, 1]
-                
-                # 关键修改：为增强输入创建 image 的副本
-                # 这样，第二次模型调用不会污染第一次调用的计算图
-                
-                # 增强输入的模型输出
-                output_aug = model(image_aug, aug_embedding.clone(), l_mask=aug_attentions.clone())
-                output_aug = output_aug.detach()  # 确保增强输入的输出不影响原始输入的梯度计算
-                # output_aug = torch.zeros_like(output)  # 初始化为零张量
+                aug_embedding = aug_last_hidden_states.permute(0, 2, 1)
+                aug_l_mask = aug_attentions.unsqueeze(-1)
+                output_student = model(image, aug_embedding, l_mask=aug_l_mask)
+
             else:
-                # 不使用BERT的情况
-                output = model(image, sentences, l_mask=attentions)
-                
-                # 同样，为增强输入创建 image 的副本
-                output_aug = model(image_aug, aug_sentences, l_mask=aug_attentions)
+                with torch.no_grad():
+                    output_teacher = model(image, sentences, l_mask=attentions)
+                output_student = model(image, aug_sentences, l_mask=aug_attentions)
 
-        # ============ 计算损失 ============
-        # 1. 计算原始标签损失 (Label Loss)
-        # 注意：这里仍然需要对 target 做 clone 以确保安全
-        target_safe = target.clone() 
-        label_loss = criterion(output, target_safe)
+            label_loss = criterion(output_student, target)
+            consistency_loss = consistent_loss_fn(output_teacher, output_student, scale_factor=lambda_consistency)
+            total_loss = label_loss + consistency_loss
 
-        # 2. 计算一致性损失 (Consistency Loss)
-        # 记得禁用原始输入分支的梯度
-        # consistency_loss = consistent_loss_fn(output.detach(), output_aug) 
-        consistency_loss = torch.tensor(0.0, device=image.device)  # 初始化为零张量
-
-        # 3. 计算总损失
-        total_loss = label_loss + lambda_consistency * consistency_loss
-
-        # ============ 反向传播 ============
         optimizer.zero_grad()
-        # 使用scaler进行混合精度训练的反向传播
-        with torch.autograd.set_detect_anomaly(True):
-            scaler.scale(total_loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+        scaler.scale(total_loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
 
-        # ============ 更新学习率和日志 ============
+        # 更新学习率（确认 scheduler 类型）
         lr_scheduler.step()
-        # 累加损失用于最终平均
-        train_loss += total_loss.item()
-        iterations += 1
-        # 使用metric_logger记录各项指标
+
         metric_logger.update(
             loss=total_loss.item(),
             label_loss=label_loss.item(),
@@ -227,25 +181,10 @@ def train_one_epoch(model, criterion, optimizer, data_loader, lr_scheduler, epoc
             lr=optimizer.param_groups[0]["lr"]
         )
 
-        # ============ 清理内存 ============
-        # 删除不再需要的变量以释放GPU内存
-        del image, target, sentences, attentions, aug_sentences, aug_attentions
-        del output, output_aug, label_loss, consistency_loss, total_loss
-        if bert_model is not None:
-            del last_hidden_states, embedding, aug_last_hidden_states, aug_embedding
+    print(f"Epoch {epoch}: Avg Label Loss: {metric_logger.meters['label_loss'].global_avg:.4f}, "
+          f"Avg Consistency Loss: {metric_logger.meters['consistent_loss'].global_avg:.4f}")
 
-        # 每100次迭代清空一次缓存
-        if total_its % 100 == 0:
-            torch.cuda.empty_cache()
-
-        # 同步所有进程（在分布式训练中很重要）
-        torch.distributed.barrier()
-
-    # 打印该epoch的平均损失
-    print(f"Epoch {epoch}: Average Label Loss: {metric_logger.meters['label_loss'].global_avg:.4f}, "
-          f"Average Consistency Loss: {metric_logger.meters['consistent_loss'].global_avg:.4f}")
-
-    return train_loss / total_its, iterations
+    return metric_logger.meters['loss'].global_avg, iterations
 # 
 def main(args):
     # dataset, num_classes = get_dataset("train",
@@ -283,13 +222,13 @@ def main(args):
         dataset_test, batch_size=1, sampler=test_sampler, num_workers=args.workers)
 
     # model initialization
-    print(args.model)
-    model = segmentation.__dict__[args.model](pretrained=args.pretrained_swin_weights,
-                                              args=args)
+    # ========== 原始模型初始化 ==========
+    model = segmentation.__dict__[args.model](pretrained=args.pretrained_swin_weights, args=args)
     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
     model.cuda()
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], find_unused_parameters=True)
     single_model = model.module
+
 
     if args.model != 'lavt_one':
         model_class = BertModel

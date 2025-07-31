@@ -59,14 +59,17 @@ class PseudoLabelDataset(data.Dataset):
         
         ## Augment text
         augment_text_path = os.path.join(self.augment_text_root, f"{self.dataset}_{self.split}_augtext_{idx}.json")
-        aug_data = json.load(open(augment_text_path, 'r'))
-        aug_text_keys = list(aug_data.keys())[1:]
-        if aug_text_keys is None or len(aug_text_keys) == 0:
-            aug_txt = txt  # Fallback to original text if no augmented texts are available
+        if os.path.exists(augment_text_path):
+            aug_data = json.load(open(augment_text_path, 'r'))
+            aug_text_keys = list(aug_data.keys())[1:]
+            if aug_text_keys is None or len(aug_text_keys) == 0:
+                aug_txt = txt  # Fallback to original text if no augmented texts are available
+            else:
+                ## Random select one of the augmented texts
+                selected = np.random.choice(list(aug_text_keys))
+                aug_txt = aug_data[selected]
         else:
-            ## Random select one of the augmented texts
-            selected = np.random.choice(list(aug_text_keys))
-            aug_txt = aug_data[selected]
+            aug_txt = txt
         
         mask_path = os.path.join(self.mask_root, mask_file_name)
         mask_candidates = json.load(open(mask_path, 'r'))["annotation"]
@@ -77,7 +80,11 @@ class PseudoLabelDataset(data.Dataset):
         img, target = self.image_transforms(img, mask)
         
         padded_input_ids, attention_mask = self.tokenize_text(txt)
-        aug_padded_input_ids, aug_attention_mask = self.tokenize_text(aug_txt)
+        try:
+            aug_padded_input_ids, aug_attention_mask = self.tokenize_text(aug_txt)
+        except Exception as e:
+            print(f"Error tokenizing augmented text: {e}")
+            aug_padded_input_ids, aug_attention_mask = self.tokenize_text(txt)
         return img, target, padded_input_ids, attention_mask, aug_padded_input_ids, aug_attention_mask
     
     def tokenize_text(self, text: str) -> tuple[torch.Tensor, torch.Tensor]:
@@ -91,6 +98,8 @@ class PseudoLabelDataset(data.Dataset):
             tuple: Padded input IDs and attention mask as tensors.
         """
         encoded = self.tokenizer.encode(text, add_special_tokens=True)
+        if len(encoded) > self.max_tokens:
+            encoded = encoded[:self.max_tokens]
         padding_length = self.max_tokens - len(encoded)
         padded_ids = encoded + [0] * padding_length
         attention_mask = [1] * len(encoded) + [0] * padding_length
