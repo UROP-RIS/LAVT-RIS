@@ -1,5 +1,5 @@
 #!/bin/bash
-mkdir -p ./models/refcoco
+mkdir -p ./models/refcoco+
 
 gpu="1,2,3,4,5"
 export CUDA_VISIBLE_DEVICES=$gpu
@@ -10,9 +10,9 @@ torchrun \
     --master_port=12346 \
     train_pseudo.py \
     --model lavt \
-    --dataset refcoco \
-    --model_id refcoco \
-    --pseudo_dataset unc \
+    --dataset refcoco+ \
+    --pseudo_dataset unc+ \
+    --model_id refcoco+ \
     --batch-size 12 \
     --lr 0.00005 \
     --workers 12 \
@@ -23,4 +23,4 @@ torchrun \
     --img_size 480 \
     --pin_mem true \
     --ck_bert ./bert/models \
-    2>&1 | tee ./models/refcoco/output
+    2>&1 | tee ./models/refcoco+/output

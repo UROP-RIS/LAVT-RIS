@@ -2,7 +2,7 @@ python test.py \
     --model lavt \
     --swin_type base \
     --dataset refcoco \
-    --split testB \
+    --split val  \
     --resume ./checkpoints/model_best_refcoco.pth \
     --workers 4 \
     --ddp_trained_weights \

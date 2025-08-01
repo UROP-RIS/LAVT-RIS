@@ -17,7 +17,7 @@ import torch.nn.functional as F
 import gc
 from collections import OrderedDict
 import data.dataset_pseudo as pseudo
-from loss import LabelCriterion, ConsistentDiceLoss
+from loss import LabelCriterion, ConsistentDiceLoss, ConsistentKLLoss
 
 # ----------------------- 重要修改开始 -----------------------
 # 我们不再通过 argparse 从命令行获取 local_rank
@@ -119,6 +119,7 @@ def train_one_epoch(model, criterion, optimizer, data_loader, lr_scheduler, epoc
     metric_logger.add_meter('consistent_loss', utils.SmoothedValue(window_size=20, fmt='{value:.4f}'))
     header = 'Epoch: [{}]'.format(epoch)
     consistent_loss_fn = ConsistentDiceLoss(smooth=1.0)
+    # consistent_loss_fn = ConsistentKLLoss(temperature=1.5)
 
     for data in metric_logger.log_every(data_loader, print_freq, header):
         image, target, sentences, attentions, aug_sentences, aug_attentions = data
@@ -192,7 +193,7 @@ def main(args):
     #                                    args=args)
     dataset = pseudo.get_dataset(
         root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
-        dataset="unc",
+        dataset=args.pseudo_dataset,
         split="train",
         max_tokens=20
     )

@@ -33,7 +33,7 @@ BASE_URL = "https://api.deepseek.com/v1/chat/completions"
 
 # 数据与任务配置
 DATASET_ROOT = "/data/datasets/tzhangbu/Cherry-Pick/data/refcoco"
-DATASET = "unc"
+DATASET = "Gref"
 SPLIT = "train"
 MAX_ITEMS = None           # 只处理前 500 条
 BATCH_SIZE = 10           # 每批并发数

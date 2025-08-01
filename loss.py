@@ -73,54 +73,30 @@ class ConsistentDiceLoss(nn.Module):
     
 class ConsistentKLLoss(nn.Module):
     """
-    一致性损失 (Consistency Loss)。
-    使用 KL 散度 (KL Divergence) 作为损失函数。
-    让增强输入的预测 (student) 拟合原始输入的预测 (teacher)。
+    一致性损失：使用 KL 散度，让学生 (pred_aug) 拟合教师 (pred_clean)
+    改进：对每个像素取平均，损失不依赖分辨率
     """
-    def __init__(self, temperature=1.0, scale_factor=1.0):
-        """
-        Args:
-            temperature: 温度系数，用于软化概率分布。
-                         温度越高，分布越平滑；温度越低，分布越尖锐。
-            scale_factor: 损失的缩放因子。
-        """
-        super(ConsistentKLLoss, self).__init__()
+    def __init__(self, temperature=2.0):
+        super().__init__()
         self.temperature = temperature
-        self.scale_factor = scale_factor
-        # 使用 nn.KLDivLoss，注意其第一个参数是 log-probabilities
-        self.kl_loss = nn.KLDivLoss(reduction='batchmean')
 
-    def forward(self, pred_clean, pred_aug):
-        """
-        Args:
-            pred_clean: 原始输入的模型输出 (logits), shape [B, 2, H, W]
-            pred_aug:   增强输入的模型输出 (logits), shape [B, 2, H, W]
-
-        Returns:
-            consistency_loss: 标量损失值
-        """
-        # 获取张量的形状
+    def forward(self, pred_clean, pred_aug, scale_factor=1.0):
         B, C, H, W = pred_clean.shape
-        
-        # 步骤1: 将 logits 转换为 log-probabilities (用于KL散度的输入)
-        # 注意：F.log_softmax 是计算 log-probabilities 的标准方法
-        log_prob_aug = F.log_softmax(pred_aug / self.temperature, dim=1)  # [B, 2, H, W]
-        
-        # 步骤2: 将 logits 转换为 probabilities (用于KL散度的目标)
-        # 注意：F.softmax 是计算 probabilities 的标准方法
-        prob_clean = F.softmax(pred_clean / self.temperature, dim=1)       # [B, 2, H, W]
-        
-        # 步骤3: 计算KL散度
-        # KL(P_clean || P_aug) = sum(P_clean * log(P_clean / P_aug))
-        # nn.KLDivLoss 计算的是 sum(target * (log_target - log_input))，所以:
-        # input = log_prob_aug, target = prob_clean
-        # 注意：我们这里使用的是 "reverse KL"，即用 P_aug 去拟合 P_clean。
-        # 这是自蒸馏中的标准做法：让学生 (aug) 拟合教师 (clean)。
-        kl_div_loss = self.kl_loss(log_prob_aug, prob_clean)  # 标量
-        
-        # 应用缩放因子
-        consistency_loss = kl_div_loss * self.scale_factor
-        
+
+        # 应用温度缩放
+        log_prob_aug = F.log_softmax(pred_aug / self.temperature, dim=1)
+        prob_clean = F.softmax(pred_clean / self.temperature, dim=1)
+
+        # 计算每个像素的 KL: sum over class dimension
+        # KL = sum(p_clean * (log(p_clean) - log(p_aug)))
+        kl_per_pixel = torch.sum(prob_clean * (torch.log(prob_clean + 1e-8) - log_prob_aug), dim=1)  # [B, H, W]
+
+        # 对 batch 和空间维度取平均
+        kl_loss = torch.mean(kl_per_pixel)  # scalar
+
+        # 温度补偿（Hinton et al.）
+        consistency_loss = kl_loss * scale_factor * (self.temperature ** 2)
+
         return consistency_loss
     
 

@@ -9,6 +9,7 @@ def get_parser():
     parser.add_argument('--bert_tokenizer', default='bert-base-uncased', help='BERT tokenizer')
     parser.add_argument('--ck_bert', default='bert-base-uncased', help='pre-trained BERT weights')
     parser.add_argument('--dataset', default='refcoco', help='refcoco, refcoco+, or refcocog')
+    parser.add_argument('--pseudo_dataset', default='unc', help='unc, unc+ or gref')
     parser.add_argument('--ddp_trained_weights', action='store_true',
                         help='Only needs specified when testing,'
                              'whether the weights to be loaded are from a DDP-trained model')
