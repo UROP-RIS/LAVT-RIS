@@ -113,7 +113,7 @@ def main(args):
                                                    sampler=test_sampler, num_workers=args.workers)
     print(args.model)
     single_model = segmentation.__dict__[args.model](pretrained='',args=args)
-    checkpoint = torch.load(args.resume, map_location='cpu')
+    checkpoint = torch.load(args.resume, map_location='cpu', weights_only=False)
     single_model.load_state_dict(checkpoint['model'])
     model = single_model.to(device)
 

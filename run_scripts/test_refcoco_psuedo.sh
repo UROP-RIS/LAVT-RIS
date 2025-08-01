@@ -1,0 +1,12 @@
+python test.py \
+    --model lavt \
+    --swin_type base \
+    --dataset refcoco \
+    --split testB \
+    --resume ./checkpoints/model_best_refcoco.pth \
+    --workers 4 \
+    --ddp_trained_weights \
+    --window12 \
+    --img_size 480 \
+    --ck_bert ./bert/models \
+    --device cuda:7
