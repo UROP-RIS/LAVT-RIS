@@ -1,12 +1,12 @@
-python test.py \
+python test_with_candidates.py \
     --model lavt \
     --swin_type base \
-    --dataset refcoco \
+    --dataset Gref \
     --split val  \
-    --resume ./checkpoints/model_best_refcoco.pth \
+    --resume ./checkpoints/gref_pseudo_consistent.pth \
     --workers 4 \
     --ddp_trained_weights \
     --window12 \
     --img_size 480 \
     --ck_bert ./bert/models \
-    --device cuda:1
+    --device cuda:3

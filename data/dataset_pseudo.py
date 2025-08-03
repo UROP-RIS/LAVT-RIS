@@ -17,7 +17,8 @@ class PseudoLabelDataset(data.Dataset):
                  dataset: str = "unc", 
                  split = "train", 
                  max_tokens=20,
-                 augment_text_root="augmentation/data/unc/train"):
+                 augment_text_root="augmentation/data/unc/train",
+                 eval_mode=False):
         self.root = root
         self.dataset = dataset
         self.split = split
@@ -35,6 +36,7 @@ class PseudoLabelDataset(data.Dataset):
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         self.max_tokens = max_tokens
         self.image_transforms = image_transforms
+        self.eval_mode = eval_mode
             
         print(self.index_list[:10], "first 10 pseudo label files")
         print(len(self.index_list), "pseudo label files found")
@@ -84,7 +86,19 @@ class PseudoLabelDataset(data.Dataset):
         except Exception as e:
             print(f"Error tokenizing augmented text: {e}")
             aug_padded_input_ids, aug_attention_mask = self.tokenize_text(txt)
-        return img, target, padded_input_ids, attention_mask, aug_padded_input_ids, aug_attention_mask
+        # return img, target, padded_input_ids, attention_mask, aug_padded_input_ids, aug_attention_mask
+        batch = {
+            "img": img,
+            "target": target,
+            "txt": padded_input_ids,
+            "attention_mask": attention_mask,
+            "aug_txt": aug_padded_input_ids,
+            "aug_attention_mask": aug_attention_mask,
+        }
+        
+        return batch
+        
+
     
     def extract_number(self, filename):
         match = re.search(r'_(\d+)\.json$', filename)
@@ -124,6 +138,7 @@ class PseudoLabelDataset(data.Dataset):
         img_txt_gt = np.load(img_txt_gt_path, allow_pickle=True)
         data_dict = {key: img_txt_gt[key] for key in img_txt_gt}
         img = data_dict['im_batch']
+        orig_h, orig_w = img.shape[:2]
         img = Image.fromarray(img.astype(np.uint8)).convert("RGB")
         txt = data_dict['sent_batch'][0]
         
@@ -132,6 +147,7 @@ class PseudoLabelDataset(data.Dataset):
         rle_mask = mask_candidates[predicted_mask_id]["rle"]
         mask = pycocotools_mask.decode(rle_mask)
         mask = Image.fromarray(mask.astype(np.uint8)).convert("P")
+        img, mask = self.image_transforms(img, mask)
         
         ## Augment text
         data_id = self.extract_number(os.path.basename(index_path))
@@ -148,15 +164,30 @@ class PseudoLabelDataset(data.Dataset):
         else:
             aug_txt = txt   
         
-        return {
+        batch = {
             "img": img,
             "txt": txt,
             "aug_txt": aug_txt,
             "mask": mask,
+            "orig_size": (orig_h, orig_w),  # 保留原始尺寸
         }
+        
+        # Return all candidates if specified
+        all_masks = []
+        for i, candidate in enumerate(mask_candidates):
+            rle_mask = candidate["rle"]
+            mask = pycocotools_mask.decode(rle_mask)
+            all_masks.append(mask)
+        batch["all_masks"] = all_masks
+        
+        # gt
+        gt = data_dict["mask_batch"]
+        batch["gt"] = gt
+        
+        return batch
 
 
-def get_dataset(root: str, dataset: str, split: str, image_transforms=None, max_tokens=20):
+def get_dataset(root: str, dataset: str, split: str, image_transforms=None, max_tokens=20, eval_mode=False):
     """
     Get the PseudoLabelDataset.
     
@@ -178,14 +209,15 @@ def get_dataset(root: str, dataset: str, split: str, image_transforms=None, max_
                       ]
         image_transforms = T.Compose(transforms)
 
-    return PseudoLabelDataset(image_transforms, root, dataset, split, max_tokens)
+    return PseudoLabelDataset(image_transforms, root, dataset, split, max_tokens, eval_mode=eval_mode)
 
 if __name__ == "__main__":
     dataset = get_dataset(
         root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
         dataset="unc",
         split="train",
-        max_tokens=20
+        max_tokens=20, 
+        eval_mode=True
     )
     length = len(dataset)
     print(f"Dataset length: {length}")
@@ -200,8 +232,11 @@ if __name__ == "__main__":
         print(f"Sample {i}:")
         print(f"Text: {data_dict['txt']}")
         print(f"Augmented Text: {data_dict['aug_txt']}")
-        print(f"Image size: {data_dict['img'].size}")
-        print(f"Mask size: {data_dict['mask'].size}")
+        print(f"Image size: {data_dict['img'].shape()}")
+        print(f"Mask size: {data_dict['mask'].shape}")
+        print(f"GT size: {data_dict['gt'].shape}")
+        print(f"Number of all masks: {len(data_dict['all_masks'])}")
+        print(f"All masks sizes: {[mask.shape for mask in data_dict['all_masks']]}")
         print("-" * 20)
     
     

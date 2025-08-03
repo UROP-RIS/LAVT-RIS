@@ -122,7 +122,13 @@ def train_one_epoch(model, criterion, optimizer, data_loader, lr_scheduler, epoc
     # consistent_loss_fn = ConsistentKLLoss(temperature=1.5)
 
     for data in metric_logger.log_every(data_loader, print_freq, header):
-        image, target, sentences, attentions, aug_sentences, aug_attentions = data
+        # image, target, sentences, attentions, aug_sentences, aug_attentions = data
+        image = data['img']
+        target = data['target']
+        sentences = data['txt']
+        attentions = data['attention_mask']
+        aug_sentences = data['aug_txt']
+        aug_attentions = data['aug_attention_mask']
         image = image.cuda(non_blocking=True)
         target = target.cuda(non_blocking=True)
         sentences = sentences.cuda(non_blocking=True).squeeze(1)
@@ -162,7 +168,6 @@ def train_one_epoch(model, criterion, optimizer, data_loader, lr_scheduler, epoc
                 with torch.no_grad():
                     output_teacher = model(image, sentences, l_mask=attentions)
                 output_student = model(image, aug_sentences, l_mask=aug_attentions)
-
             label_loss = criterion(output_student, target)
             consistency_loss = consistent_loss_fn(output_teacher, output_student, scale_factor=lambda_consistency)
             total_loss = label_loss + consistency_loss
