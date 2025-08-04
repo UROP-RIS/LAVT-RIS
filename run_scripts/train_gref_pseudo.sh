@@ -1,7 +1,7 @@
 #!/bin/bash
 mkdir -p ./models/Gref
 
-gpu="3,4,5"
+gpu="1,2,3,4,5"
 export CUDA_VISIBLE_DEVICES=$gpu
 np=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n' | wc -l)
 
@@ -13,7 +13,7 @@ torchrun \
     --dataset refcocog \
     --splitBy google \
     --model_id gref_google \
-    --pseudo_dataset Gref \
+    --pseudo_dataset unc Gref \
     --batch-size 12 \
     --lr 0.00005 \
     --workers 12 \

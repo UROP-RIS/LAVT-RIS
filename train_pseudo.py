@@ -1,5 +1,6 @@
 import datetime
 from torch.cuda.amp import autocast, GradScaler
+from torch.utils.data import ConcatDataset
 import os
 import time
 import torch
@@ -18,6 +19,7 @@ import gc
 from collections import OrderedDict
 import data.dataset_pseudo as pseudo
 from loss import LabelCriterion, ConsistentDiceLoss, ConsistentKLLoss
+
 
 # ----------------------- 重要修改开始 -----------------------
 # 我们不再通过 argparse 从命令行获取 local_rank
@@ -196,12 +198,25 @@ def main(args):
     # dataset, num_classes = get_dataset("train",
     #                                    get_transform(args=args),
     #                                    args=args)
-    dataset = pseudo.get_dataset(
-        root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
-        dataset=args.pseudo_dataset,
-        split="train",
-        max_tokens=20
-    )
+    if len(args.pseudo_dataset) > 1:
+        datasets = []
+        for dataset_name in args.pseudo_dataset:
+            datasets.append(
+                pseudo.get_dataset(
+                    root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
+                    dataset=dataset_name,
+                    split="train",
+                    max_tokens=20
+                )
+            )
+        dataset = ConcatDataset(datasets)
+    else:
+        dataset = pseudo.get_dataset(
+            root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
+            dataset=args.pseudo_dataset,
+            split="train",
+            max_tokens=20
+        )
     dataset_test, _ = get_dataset("val",
                                   get_transform(args=args),
                                   args=args)
