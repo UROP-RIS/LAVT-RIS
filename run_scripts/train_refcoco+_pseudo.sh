@@ -11,7 +11,7 @@ torchrun \
     train_pseudo.py \
     --model lavt \
     --dataset refcoco+ \
-    --pseudo_dataset unc+ \
+    --pseudo_dataset unc unc+ \
     --model_id refcoco+ \
     --batch-size 12 \
     --lr 0.00005 \

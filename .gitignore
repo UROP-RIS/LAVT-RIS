@@ -14,3 +14,5 @@ __pycache__
 /demo
 *.json
 /augmentation/data
+*.jpg
+/visualizations

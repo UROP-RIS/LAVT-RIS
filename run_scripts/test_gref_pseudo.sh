@@ -4,7 +4,7 @@ python test.py \
     --dataset refcocog \
     --splitBy google \
     --split val \
-    --resume ./checkpoints/model_best_gref_google.pth \
+    --resume ./checkpoints/gref_consistent_with_unc.pth  \
     --workers 4 \
     --ddp_trained_weights \
     --window12 \
