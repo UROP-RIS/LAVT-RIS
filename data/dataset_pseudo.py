@@ -138,6 +138,7 @@ class PseudoLabelDataset(data.Dataset):
         img_txt_gt = np.load(img_txt_gt_path, allow_pickle=True)
         data_dict = {key: img_txt_gt[key] for key in img_txt_gt}
         img = data_dict['im_batch']
+        raw_img = img.copy()
         orig_h, orig_w = img.shape[:2]
         img = Image.fromarray(img.astype(np.uint8)).convert("RGB")
         txt = data_dict['sent_batch'][0]
@@ -170,6 +171,7 @@ class PseudoLabelDataset(data.Dataset):
             "aug_txt": aug_txt,
             "mask": mask,
             "orig_size": (orig_h, orig_w),  # 保留原始尺寸
+            "raw_img": raw_img,  # 保留原始图像
         }
         
         # Return all candidates if specified

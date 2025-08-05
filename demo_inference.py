@@ -16,9 +16,9 @@ import numpy as np
 # 1. 配置参数
 # ================================
 image_path = 'demo/1.png'
-sentence = 'black man in yellow shirt'
+sentence = 'woman in the middle'
 # weights = './checkpoints/refcoco_pseudo.pth'
-weights = './checkpoints/model_best_refcoco.pth'
+weights = './checkpoints/model_best_gref_google.pth'
 # weights = "./checkpoints/refcoco_4cards.pth"
 device = 'cuda:0'
 output_dir = './demo'

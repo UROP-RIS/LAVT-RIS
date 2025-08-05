@@ -36,7 +36,7 @@ def evaluate(model, data_loader, bert_model, device):
 
     # evaluation variables
     cum_I, cum_U = 0, 0
-    eval_seg_iou_list = [.5, .6, .7, .8, .9]
+    eval_seg_iou_list = [.1, .2, .3, .4, .5, .6, .7, .8, .9]
     seg_correct = np.zeros(len(eval_seg_iou_list), dtype=np.int32)
     seg_total = 0
     mean_IoU = []

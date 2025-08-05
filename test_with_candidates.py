@@ -39,10 +39,12 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, dataset):
     model.eval()
     metric_logger = utils.MetricLogger(delimiter="  ")
 
-    eval_seg_iou_list = [.5, .6, .7, .8, .9]
+    eval_seg_iou_list = [.1, .2, .3, .4, .5, .6, .7, .8, .9]
     seg_correct = np.zeros(len(eval_seg_iou_list), dtype=np.int32)
     seg_total = 0
     mean_IoU = []
+    
+    cumI, cumU = 0, 0
 
     header = 'Test:'
 
@@ -93,11 +95,15 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, dataset):
                         best_iou = iou
                         best_candidate = cand
 
-                if best_candidate is None:
-                    best_candidate = np.zeros_like(pred_mask_np)
+                if best_candidate is None or best_iou < 0.4:
+                    # best_candidate = np.zeros_like(pred_mask_np)
+                    best_candidate = pred_mask_np  # Fallback to pred_mask if no candidate found
+
 
                 # Step 2: compare best candidate with GT
                 I, U = computeIoU(best_candidate, gt_mask)
+                cumI += I
+                cumU += U
                 this_iou = I * 1.0 / U if U > 0 else 0.0
 
                 mean_IoU.append(this_iou)
@@ -113,7 +119,7 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, dataset):
     for n_eval_iou in range(len(eval_seg_iou_list)):
         results_str += '    precision@%s = %.2f\n' % \
                        (str(eval_seg_iou_list[n_eval_iou]), seg_correct[n_eval_iou] * 100. / seg_total)
-    results_str += '    overall IoU = %.2f\n' % (np.sum(mean_IoU) * 100. / seg_total)
+    results_str += '    overall IoU = %.2f\n' % (float(cumI) / float(cumU) * 100.)
     print(results_str)
 
     return mIoU
