@@ -1,7 +1,7 @@
 python test_with_candidates.py \
     --model lavt \
     --swin_type base \
-    --dataset unc \
+    --dataset unc+ \
     --split testB  \
     --resume ./checkpoints/model_best_refcoco+.pth \
     --workers 4 \
@@ -9,4 +9,4 @@ python test_with_candidates.py \
     --window12 \
     --img_size 480 \
     --ck_bert ./bert/models \
-    --device cuda:6
+    --device cuda:3

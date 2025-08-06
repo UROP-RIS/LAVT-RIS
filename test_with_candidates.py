@@ -158,7 +158,7 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, dataset, o
 
                     # --- Mask 叠加 ---
                     def draw_mask(img, mask, color, alpha=0.5):
-                        print(f"[Debug] pred_mask sum: {mask.sum()} / {mask.size} ({mask.sum() / mask.size * 100:.2f}%)")
+                        # print(f"[Debug] pred_mask sum: {mask.sum()} / {mask.size} ({mask.sum() / mask.size * 100:.2f}%)")
                         mask = mask.astype(bool)
                         overlay = img.copy()
                         overlay[mask] = color
@@ -288,7 +288,7 @@ def main(args):
         bert_model = None
 
     # 使用新 evaluation 函数
-    evaluate_pseudo_candidate(model, data_loader_test, bert_model, device, dataset_test, output_dir=f"./visualizations/{args.split}_{args.model}")
+    evaluate_pseudo_candidate(model, data_loader_test, bert_model, device, dataset_test, output_dir=f"./visualizations/{args.dataset}_{args.split}_{args.model}")
 
 
 if __name__ == "__main__":
