@@ -10,6 +10,35 @@ class LabelCriterion(nn.Module):
     def forward(self, input, target):
         return F.cross_entropy(input, target, weight=self.weight)
 
+class LabelDiceLoss(nn.Module):
+    def __init__(self, smooth=1.0, reduction='mean'):
+        super().__init__()
+        self.smooth = smooth
+        self.reduction = reduction
+
+    def forward(self, input, target):
+        # input: (B, 2, H, W) logits
+        # 使用 sigmoid（二分类）或 softmax（多类）均可，这里用 softmax 提取前景
+        prob = F.softmax(input, dim=1)
+        pred = prob[:, 1]  # (B, H, W)
+
+        pred_flat = pred.contiguous().view(pred.size(0), -1)
+        target_flat = target.contiguous().view(target.size(0), -1)
+
+        intersection = (pred_flat * target_flat).sum(dim=1)
+        pred_sq_sum = (pred_flat ** 2).sum(dim=1)
+        target_sq_sum = (target_flat ** 2).sum(dim=1)
+
+        dice = (2. * intersection + self.smooth) / (pred_sq_sum + target_sq_sum + self.smooth)
+        loss = 1. - dice
+
+        if self.reduction == 'mean':
+            return loss.mean()
+        elif self.reduction == 'sum':
+            return loss.sum()
+        else:
+            return loss
+        
 class ConsistentDiceLoss(nn.Module):
     """
     一致性损失 (Consistency Loss)。

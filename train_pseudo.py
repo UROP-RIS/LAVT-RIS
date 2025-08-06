@@ -18,7 +18,7 @@ import torch.nn.functional as F
 import gc
 from collections import OrderedDict
 import data.dataset_pseudo as pseudo
-from loss import LabelCriterion, ConsistentDiceLoss, ConsistentKLLoss
+from loss import LabelCriterion, ConsistentDiceLoss, ConsistentKLLoss, LabelDiceLoss
 
 
 # ----------------------- 重要修改开始 -----------------------
@@ -213,7 +213,7 @@ def main(args):
     else:
         dataset = pseudo.get_dataset(
             root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
-            dataset=args.pseudo_dataset,
+            dataset=args.pseudo_dataset[0],
             split="train",
             max_tokens=20
         )
@@ -325,7 +325,8 @@ def main(args):
         resume_epoch = -999
 
     # training loops
-    label_criterion = LabelCriterion(weight=torch.FloatTensor([0.9, 1.1]).cuda())
+    # label_criterion = LabelCriterion(weight=torch.FloatTensor([0.9, 1.1]).cuda())
+    label_criterion = LabelDiceLoss(smooth=1.0)
     for epoch in range(max(0, resume_epoch+1), args.epochs):
         data_loader.sampler.set_epoch(epoch)
         train_one_epoch(model, label_criterion, optimizer, data_loader, lr_scheduler, epoch, args.print_freq,
