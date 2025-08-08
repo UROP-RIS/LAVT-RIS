@@ -17,7 +17,7 @@ class PseudoLabelDataset(data.Dataset):
                  dataset: str = "unc", 
                  split = "train", 
                  max_tokens=20,
-                 augment_text_root="augmentation/data/unc/train",
+                 augment_text_root="augmentation/data",
                  eval_mode=False):
         self.root = root
         self.dataset = dataset
@@ -26,7 +26,12 @@ class PseudoLabelDataset(data.Dataset):
         self.index_root = f"{self.root}/{self.dataset}/{self.split}_pseudo_score"
         self.image_txt_gt_root = f"{self.root}/{self.dataset}/{self.split}_batch"
         self.mask_root = f"{self.root}/{self.dataset}/{self.split}_mask_newB_batch"
-        self.augment_text_root = augment_text_root
+        self.augment_text_root = f"{augment_text_root}/{self.dataset}/{self.split}"
+        
+        print(f"Loading dataset from {self.index_root}")
+        print(f"Image text ground truth root: {self.image_txt_gt_root}")
+        print(f"Mask root: {self.mask_root}")
+        print(f"Augment text root: {self.augment_text_root}")
     
         # Read and sort JSON files by number at the end of filename
         json_files = [f for f in os.listdir(self.index_root) if f.endswith('.json')]
@@ -71,6 +76,9 @@ class PseudoLabelDataset(data.Dataset):
                 aug_txt = aug_data[selected]
         else:
             aug_txt = txt
+        
+        if aug_txt == txt:
+            print(f"Warning: Augmented text is the same as original text for index {idx}. Using original text.")
         
         mask_path = os.path.join(self.mask_root, mask_file_name)
         mask_candidates = json.load(open(mask_path, 'r'))["annotation"]

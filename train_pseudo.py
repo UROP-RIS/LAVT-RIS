@@ -122,6 +122,8 @@ def train_one_epoch(model, criterion, optimizer, data_loader, lr_scheduler, epoc
     header = 'Epoch: [{}]'.format(epoch)
     consistent_loss_fn = ConsistentDiceLoss(smooth=1.0)
     # consistent_loss_fn = ConsistentKLLoss(temperature=1.5)
+    
+    # warmup for the first few epochs
 
     for data in metric_logger.log_every(data_loader, print_freq, header):
         # image, target, sentences, attentions, aug_sentences, aug_attentions = data
@@ -190,10 +192,11 @@ def train_one_epoch(model, criterion, optimizer, data_loader, lr_scheduler, epoc
         )
 
     print(f"Epoch {epoch}: Avg Label Loss: {metric_logger.meters['label_loss'].global_avg:.4f}, "
-          f"Avg Consistency Loss: {metric_logger.meters['consistent_loss'].global_avg:.4f}")
+          f"Avg Consistency Loss: {metric_logger.meters['consistent_loss'].global_avg:.4f}, "
+          f"Lambda consistency: {lambda_consistency}")
 
     return metric_logger.meters['loss'].global_avg, iterations
-# 
+
 def main(args):
     # dataset, num_classes = get_dataset("train",
     #                                    get_transform(args=args),
@@ -325,8 +328,8 @@ def main(args):
         resume_epoch = -999
 
     # training loops
-    # label_criterion = LabelCriterion(weight=torch.FloatTensor([0.9, 1.1]).cuda())
-    label_criterion = LabelDiceLoss(smooth=1.0)
+    label_criterion = LabelCriterion(weight=torch.FloatTensor([0.9, 1.1]).cuda())
+    # label_criterion = LabelDiceLoss(smooth=1.0)
     for epoch in range(max(0, resume_epoch+1), args.epochs):
         data_loader.sampler.set_epoch(epoch)
         train_one_epoch(model, label_criterion, optimizer, data_loader, lr_scheduler, epoch, args.print_freq,
