@@ -2,8 +2,8 @@ python test_with_candidates.py \
     --model lavt \
     --swin_type base \
     --dataset unc \
-    --split testA  \
-    --resume ./checkpoints/refcoco_psuedo_consistent.pth \
+    --split testB  \
+    --resume ./checkpoints/model_best_refcoco.pth \
     --workers 4 \
     --ddp_trained_weights \
     --window12 \

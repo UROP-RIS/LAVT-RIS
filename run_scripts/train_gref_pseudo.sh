@@ -1,19 +1,19 @@
 #!/bin/bash
 mkdir -p ./models/Gref
 
-gpu="1,2,3,4,5"
+gpu="2,3,4,5"
 export CUDA_VISIBLE_DEVICES=$gpu
 np=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n' | wc -l)
 
 torchrun \
     --nproc_per_node=$np \
-    --master_port=12346 \
+    --master_port=12345 \
     train_pseudo.py \
     --model lavt \
     --dataset refcocog \
     --splitBy google \
     --model_id gref_google \
-    --pseudo_dataset unc Gref \
+    --pseudo_dataset unc \
     --batch-size 12 \
     --lr 0.00005 \
     --workers 12 \

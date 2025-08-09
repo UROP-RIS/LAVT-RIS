@@ -10,7 +10,6 @@ import json
 from pycocotools import mask as pycocotools_mask
 import torch
 
-
 class PseudoLabelDataset(data.Dataset):
     
     def __init__(self, image_transforms, root: str = "/data/datasets/tzhangbu/Cherry-Pick/data/refcoco", 
@@ -23,23 +22,21 @@ class PseudoLabelDataset(data.Dataset):
         self.dataset = dataset
         self.split = split
         
-        self.index_root = f"{self.root}/{self.dataset}/{self.split}_pseudo_score"
+        self.label_root = f"{self.root}/{self.dataset}/{self.split}_mt_pseudo_label"
         self.image_txt_gt_root = f"{self.root}/{self.dataset}/{self.split}_batch"
-        self.mask_root = f"{self.root}/{self.dataset}/{self.split}_mask_newB_batch"
         self.augment_text_root = f"{augment_text_root}/{self.dataset}/{self.split}"
         
         print("==" * 20)
-        print(f"Loading dataset from {self.index_root}")
+        print(f"Loading dataset from {self.label_root}")
         print(f"Image text ground truth root: {self.image_txt_gt_root}")
-        print(f"Mask root: {self.mask_root}")
         print(f"Augment text root: {self.augment_text_root}")
         print("==" * 20)
     
         # Read and sort JSON files by number at the end of filename
-        json_files = [f for f in os.listdir(self.index_root) if f.endswith('.json')]
+        json_files = [f for f in os.listdir(self.label_root) if f.endswith('.json')]
 
         json_files_sorted = sorted(json_files, key=self.extract_number)
-        self.index_list = [os.path.join(self.index_root, f) for f in json_files_sorted]
+        self.index_list = [os.path.join(self.label_root, f) for f in json_files_sorted]
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         self.max_tokens = max_tokens
         self.image_transforms = image_transforms
@@ -54,11 +51,12 @@ class PseudoLabelDataset(data.Dataset):
     def __getitem__(self, idx):
         index_path = self.index_list[idx]
         index_data = json.load(open(index_path, 'r'))
-        img_tx_gt_name = index_data["img_txt_gt_file_name"]
-        mask_file_name = index_data["mask_file_name"]
-        predicted_mask_id = index_data["predicted_mask_id"]
         
-        img_txt_gt_path = os.path.join(self.image_txt_gt_root, img_tx_gt_name)
+        rle_mask = index_data["pseudo_mask"]
+        mask_np = pycocotools_mask.decode(rle_mask)
+        
+        img_txt_gt_name = index_data["image_txt_gt_path"]
+        img_txt_gt_path = os.path.join(self.image_txt_gt_root, img_txt_gt_name)
         img_txt_gt = np.load(img_txt_gt_path, allow_pickle=True)
         data_dict = {key: img_txt_gt[key] for key in img_txt_gt}
         img = data_dict['im_batch']
@@ -82,11 +80,8 @@ class PseudoLabelDataset(data.Dataset):
         if aug_txt == txt:
             print(f"Warning: Augmented text is the same as original text for index {idx}. Using original text.")
         
-        mask_path = os.path.join(self.mask_root, mask_file_name)
-        mask_candidates = json.load(open(mask_path, 'r'))["annotation"]
-        rle_mask = mask_candidates[predicted_mask_id]["rle"]
-        mask = pycocotools_mask.decode(rle_mask)
-        mask = Image.fromarray(mask.astype(np.uint8)).convert("P")
+        # Transform mask and image
+        mask = Image.fromarray(mask_np.astype(np.uint8)).convert("P")
         img = Image.fromarray(img.astype(np.uint8)).convert("RGB")
         img, target = self.image_transforms(img, mask)
         
@@ -107,8 +102,6 @@ class PseudoLabelDataset(data.Dataset):
         }
         
         return batch
-        
-
     
     def extract_number(self, filename):
         match = re.search(r'_(\d+)\.json$', filename)
@@ -133,72 +126,6 @@ class PseudoLabelDataset(data.Dataset):
         
         return torch.tensor(padded_ids).unsqueeze(0), torch.tensor(attention_mask).unsqueeze(0)
     
-    def get_raw_item(self, idx):
-        """
-        Get the raw item of the text, img, and mask and augmented text from the dataset.
-        """
-        if idx < 0 or idx >= len(self.index_list):
-            raise IndexError("Index out of range.")
-        index_path = self.index_list[idx]
-        index_data = json.load(open(index_path, 'r'))
-        img_tx_gt_name = index_data["img_txt_gt_file_name"]
-        mask_file_name = index_data["mask_file_name"]
-        predicted_mask_id = index_data["predicted_mask_id"]
-        img_txt_gt_path = os.path.join(self.image_txt_gt_root, img_tx_gt_name)
-        img_txt_gt = np.load(img_txt_gt_path, allow_pickle=True)
-        data_dict = {key: img_txt_gt[key] for key in img_txt_gt}
-        img = data_dict['im_batch']
-        raw_img = img.copy()
-        orig_h, orig_w = img.shape[:2]
-        img = Image.fromarray(img.astype(np.uint8)).convert("RGB")
-        txt = data_dict['sent_batch'][0]
-        
-        mask_path = os.path.join(self.mask_root, mask_file_name)
-        mask_candidates = json.load(open(mask_path, 'r'))["annotation"]
-        rle_mask = mask_candidates[predicted_mask_id]["rle"]
-        mask = pycocotools_mask.decode(rle_mask)
-        mask = Image.fromarray(mask.astype(np.uint8)).convert("P")
-        img, mask = self.image_transforms(img, mask)
-        
-        ## Augment text
-        data_id = self.extract_number(os.path.basename(index_path))
-        augment_text_path = os.path.join(self.augment_text_root, f"{self.dataset}_{self.split}_augtext_{data_id}.json")
-        if os.path.exists(augment_text_path):
-            aug_data = json.load(open(augment_text_path, 'r'))
-            aug_text_keys = list(aug_data.keys())[1:]
-            if aug_text_keys is None or len(aug_text_keys) == 0:
-                aug_txt = txt  # Fallback to original text if no augmented texts are available
-            else:
-                ## Random select one of the augmented texts
-                selected = np.random.choice(list(aug_text_keys))
-                aug_txt = aug_data[selected]
-        else:
-            aug_txt = txt   
-        
-        batch = {
-            "img": img,
-            "txt": txt,
-            "aug_txt": aug_txt,
-            "mask": mask,
-            "orig_size": (orig_h, orig_w),  # 保留原始尺寸
-            "raw_img": raw_img,  # 保留原始图像
-        }
-        
-        # Return all candidates if specified
-        all_masks = []
-        for i, candidate in enumerate(mask_candidates):
-            rle_mask = candidate["rle"]
-            mask = pycocotools_mask.decode(rle_mask)
-            all_masks.append(mask)
-        batch["all_masks"] = all_masks
-        
-        # gt
-        gt = data_dict["mask_batch"]
-        batch["gt"] = gt
-        
-        return batch
-
-
 def get_dataset(root: str, augment_text_root: str, dataset: str, split: str, image_transforms=None, max_tokens=20, eval_mode=False):
     """
     Get the PseudoLabelDataset.
@@ -227,7 +154,7 @@ if __name__ == "__main__":
     dataset = get_dataset(
         root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
         augment_text_root="augmentation/data",
-        dataset="unc",
+        dataset="unc+",
         split="train",
         max_tokens=20, 
         eval_mode=True
@@ -241,24 +168,13 @@ if __name__ == "__main__":
     ## Print some sample of text and augmented text
     
     for i in random_choices:
-        data_dict = dataset.get_raw_item(i)
-        print(f"Sample {i}:")
-        print(f"Text: {data_dict['txt']}")
-        print(f"Augmented Text: {data_dict['aug_txt']}")
-        print(f"Image size: {data_dict['img'].shape()}")
-        print(f"Mask size: {data_dict['mask'].shape}")
-        print(f"GT size: {data_dict['gt'].shape}")
-        print(f"Number of all masks: {len(data_dict['all_masks'])}")
-        print(f"All masks sizes: {[mask.shape for mask in data_dict['all_masks']]}")
-        print("-" * 20)
-    
-    
+        data_dict = dataset[i]
+        print(f"Index {i}:")
+        print(f"Image shape: {data_dict['img'].shape}")
+        print(f"Target shape: {data_dict['target'].shape}")
+        print(f"Text: {data_dict['txt'].size()}")
+        print(f"Augmented Text: {data_dict['aug_txt'].size()}")
+        print(f"Attention Mask: {data_dict['attention_mask'].size()}")
+        print(f"Augmented Attention Mask: {data_dict['aug_attention_mask'].size()}")
 
         
-
-
-
-    
-    
-        
-

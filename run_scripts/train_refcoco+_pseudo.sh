@@ -1,7 +1,7 @@
 #!/bin/bash
 mkdir -p ./models/refcoco+
 
-gpu="1,2,3,4,5"
+gpu="0,1,6,7"
 export CUDA_VISIBLE_DEVICES=$gpu
 np=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n' | wc -l)
 
@@ -11,7 +11,7 @@ torchrun \
     train_pseudo.py \
     --model lavt \
     --dataset refcoco+ \
-    --pseudo_dataset unc unc+ \
+    --pseudo_dataset unc+ \
     --model_id refcoco+ \
     --batch-size 12 \
     --lr 0.00005 \

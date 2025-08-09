@@ -288,7 +288,8 @@ def main(args):
         bert_model = None
 
     # 使用新 evaluation 函数
-    evaluate_pseudo_candidate(model, data_loader_test, bert_model, device, dataset_test, output_dir=f"./visualizations/{args.dataset}_{args.split}_{args.model}")
+    resume_ckpt_name = os.path.basename(args.resume)
+    evaluate_pseudo_candidate(model, data_loader_test, bert_model, device, dataset_test, output_dir=f"./visualizations/{resume_ckpt_name}_{args.dataset}_{args.split}_{args.model}")
 
 
 if __name__ == "__main__":

@@ -207,6 +207,7 @@ def main(args):
             datasets.append(
                 pseudo.get_dataset(
                     root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
+                    augment_text_root="augmentation/data",
                     dataset=dataset_name,
                     split="train",
                     max_tokens=20
@@ -216,6 +217,7 @@ def main(args):
     else:
         dataset = pseudo.get_dataset(
             root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
+            augment_text_root="augmentation/data",
             dataset=args.pseudo_dataset[0],
             split="train",
             max_tokens=20
