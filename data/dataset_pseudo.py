@@ -227,7 +227,7 @@ if __name__ == "__main__":
     dataset = get_dataset(
         root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
         augment_text_root="augmentation/data",
-        dataset="unc",
+        dataset="unc+",
         split="train",
         max_tokens=20, 
         eval_mode=True
@@ -245,12 +245,6 @@ if __name__ == "__main__":
         print(f"Sample {i}:")
         print(f"Text: {data_dict['txt']}")
         print(f"Augmented Text: {data_dict['aug_txt']}")
-        print(f"Image size: {data_dict['img'].shape()}")
-        print(f"Mask size: {data_dict['mask'].shape}")
-        print(f"GT size: {data_dict['gt'].shape}")
-        print(f"Number of all masks: {len(data_dict['all_masks'])}")
-        print(f"All masks sizes: {[mask.shape for mask in data_dict['all_masks']]}")
-        print("-" * 20)
     
     
 
