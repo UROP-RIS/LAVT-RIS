@@ -194,8 +194,9 @@ class RowColumnOrdinalDataset(SynthesisDataset):
             idx = np.random.randint(0, len(self.index))
         data = self.load(idx)
         img_array = data['img']
-        noun = data['txt']
+        noun = data['txt']  # 假设是 "red bus" 这类名词短语
         mask = data['mask']
+
         coords = np.where(mask)
         if len(coords[0]) == 0:
             return None
@@ -206,7 +207,7 @@ class RowColumnOrdinalDataset(SynthesisDataset):
         # Create background
         H, W = 480, 480
         bg = np.full((H, W, 3), self.bg_color, dtype=np.uint8)
-        full_mask = np.zeros((H, W), dtype=np.uint8)  # instance ID map
+        full_mask = np.zeros((H, W), dtype=np.uint8)  # 二值 mask，只保留目标 instance
 
         # Determine number of objects
         num = np.random.randint(*self.n_objects)
@@ -216,68 +217,54 @@ class RowColumnOrdinalDataset(SynthesisDataset):
         H, W = 480, 480
 
         if self.layout == "row":
-            # 水平一行
             x_positions = np.linspace(margin, W - margin, num).astype(int)
             y_center = H // 2 + np.random.randint(-20, 20)
             positions = [(x, y_center) for x in x_positions]
-
-            # 缩放：宽度自适应
             obj_w = min(80, (W - 2 * margin) // max(num, 1) - 5)
             scale = obj_w / patch.shape[1]
 
         elif self.layout == "column":
-            # 垂直一列
             y_positions = np.linspace(margin, H - margin, num).astype(int)
             x_center = W // 2 + np.random.randint(-20, 20)
             positions = [(x_center, y) for y in y_positions]
-
-            # 缩放：高度自适应
             obj_h = min(80, (H - 2 * margin) // max(num, 1) - 5)
             scale = obj_h / patch.shape[0]
 
-        else:  # self.layout == "grid"
-            # 自动构造 grid: 找到最接近正方形的因数分解
+        else:  # grid
             rows, cols = self._get_grid_shape(num)
-
-            # 计算每行每列的位置
             x_positions = np.linspace(margin, W - margin, cols).astype(int)
             y_positions = np.linspace(margin, H - margin, rows).astype(int)
             positions = [(x, y) for y in y_positions for x in x_positions]
-            # 注意：positions 是 row-major: 第一行从左到右，然后第二行...
-
-            # 缩放：基于列宽和行高取最小值，保证不重叠
             obj_w = min(80, (W - 2 * margin) // max(cols, 1) - 5)
             obj_h = min(80, (H - 2 * margin) // max(rows, 1) - 5)
             scale_w = obj_w / patch.shape[1]
             scale_h = obj_h / patch.shape[0]
-            scale = min(scale_w, scale_h)  # 用较小的 scale，防止溢出
+            scale = min(scale_w, scale_h)
 
         # Resize patch
         new_h, new_w = int(patch.shape[0] * scale), int(patch.shape[1] * scale)
         patch_resized = cv2.resize(patch, (new_w, new_h), interpolation=cv2.INTER_AREA)
         mask_resized = cv2.resize(patch_mask, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
 
-        # Paste multiple instances
+        # === 随机选择一个目标 instance ===
+        target_idx = np.random.randint(0, num)  # 被指代的是第几个
+        target_position = None
+
+        # Paste all instances (for context), but only mask the target
         for i, (x, y) in enumerate(positions):
             bg, obj_mask = self.soft_paste(bg, patch_resized, mask_resized, x - new_w // 2, y - new_h // 2)
-            full_mask[obj_mask > 0] = i + 1  # instance ID starts from 1
+            if i == target_idx:
+                full_mask[obj_mask > 0] = 1  # 只保留目标 instance
+                target_position = (x, y)
 
-        # Generate text (template-based)
-        side = np.random.choice(["left", "right"]) if self.layout == "row" else np.random.choice(["top", "bottom"])
-        ordinals = ["first", "second", "third", "fourth", "fifth", "sixth"]
-        target_idx = np.random.randint(0, num)
-        if side in ["left", "top"]:
-            ord_str = ordinals[target_idx]
-        else:
-            ord_str = ordinals[num - target_idx - 1]
-
+        # === 生成指向 target_idx 的文本 ===
         templates = []
+
         if self.layout == "row":
             side = np.random.choice(["left", "right"])
             ordinals = ["first", "second", "third", "fourth", "fifth", "sixth"]
-            target_idx = np.random.randint(0, num)
             ord_str = ordinals[target_idx] if side == "left" else ordinals[num - target_idx - 1]
-            templates += [
+            templates = [
                 f"the {ord_str} {noun} from the {side} in the row",
                 f"{ord_str} {noun} in the row"
             ]
@@ -285,65 +272,107 @@ class RowColumnOrdinalDataset(SynthesisDataset):
         elif self.layout == "column":
             side = np.random.choice(["top", "bottom"])
             ordinals = ["first", "second", "third", "fourth", "fifth", "sixth"]
-            target_idx = np.random.randint(0, num)
             ord_str = ordinals[target_idx] if side == "top" else ordinals[num - target_idx - 1]
-            templates += [
+            templates = [
                 f"the {ord_str} {noun} from the {side} in the column",
                 f"{ord_str} {noun} in the column"
             ]
 
         else:  # grid
             rows, cols = self._get_grid_shape(num)
+            row_idx = target_idx // cols + 1
+            col_idx = target_idx % cols + 1
+            ordinals = ["first", "second", "third", "fourth", "fifth", "sixth"]
+            ord_str = ordinals[target_idx]
+
             # 2D 定位模板
-            templates += [
-                f"the {noun} in the second row third column",
-                f"top-left {noun}",
-                f"top-right {noun}",
-                f"bottom-center {noun}",
-                f"center {noun} in the grid",
-                f"the {noun} at the middle of the array",
-                f"the {noun} located in row 2 column 3",
+            templates = [
+                f"the {ord_str} {noun} in the grid",
+                f"{noun} in row {row_idx} column {col_idx}",
+                f"the {noun} in the {ordinals[row_idx-1]} row and {ordinals[col_idx-1]} column",
             ]
-            # 可加入 ordinal
-            if num <= 6:
-                ordinals = ["first", "second", "third", "fourth", "fifth", "sixth"]
-                templates.append(f"the {ordinals[np.random.randint(0, num)]} {noun} in the grid")
+            if row_idx == 1 and col_idx == 1:
+                templates.append(f"top-left {noun}")
+            elif row_idx == 1 and col_idx == cols:
+                templates.append(f"top-right {noun}")
+            elif row_idx == rows and col_idx == 1:
+                templates.append(f"bottom-left {noun}")
+            elif row_idx == rows and col_idx == cols:
+                templates.append(f"bottom-right {noun}")
+            if row_idx == (rows + 1) // 2 and col_idx == (cols + 1) // 2:
+                templates.append(f"center {noun}")
 
         text = np.random.choice(templates)
-        
+
+        print(f"Referring text: {text}")
+        print(f"Target instance: #{target_idx + 1} / {num}")
         print(f"patch range: {patch_resized.min()} ~ {patch_resized.max()}, dtype: {patch_resized.dtype}")
         print(f"bg after paste range: {bg.min()} ~ {bg.max()}")
 
         # Finalize
         if not self.load_raw_data:
-            full_mask = Image.fromarray(full_mask.astype(np.uint8)).convert("P")
+            full_mask_img = Image.fromarray(full_mask.astype(np.uint8)).convert("P")
             img_pil = Image.fromarray(bg.astype(np.uint8)).convert("RGB")
-            img_tensor, mask_tensor = self.apply_transforms(img_pil, full_mask)
+            img_tensor, mask_tensor = self.apply_transforms(img_pil, full_mask_img)
             input_ids, attention_mask = self.tokenize_text(text)
             return img_tensor, mask_tensor, input_ids, attention_mask
         else:
-            return bg, text, full_mask
+            return bg, text, full_mask  # full_mask 是二值 mask，只包含目标 instance
 
 
 if __name__ == "__main__":
-    # Example usage
-    # dataset = RowColumnOrdinalDataset(prob=0.5, root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
-    #                                   dataset="unc", split="train", max_tokens=20, layout="row", n_objects=(3, 6), load_raw_data=False)
-    # img_tensor, mask_tensor, input_ids, attention_mask = dataset()
-    # print("Image Tensor Shape:", img_tensor.shape)
-    # print("Mask Tensor Shape:", mask_tensor.shape)
-    # print("Input IDs Shape:", input_ids.shape)
-    # print("Attention Mask Shape:", attention_mask.shape)
-        
-        
-    dataset = RowColumnOrdinalDataset(prob=0.5, root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
-                                      dataset="unc", split="train", max_tokens=20, layout="grid", n_objects=(3, 9), load_raw_data=True)
-    
-    print("==", "Testing RowColumnOrdinalDataset with raw data loading")
-    img, txt, mask = dataset()
-    print("Referring text:", txt)
-    vis_img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-    cv2.imwrite("visualizations/synthetics/example1.png", vis_img)
+    import os
+    import cv2
+    import numpy as np
+
+    os.makedirs("visualizations/synthetics", exist_ok=True)
+
+    dataset = RowColumnOrdinalDataset(
+        prob=1.0,
+        root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
+        dataset="unc", 
+        split="train", 
+        max_tokens=20, 
+        layout="grid", 
+        n_objects=(3, 6), 
+        load_raw_data=True
+    )
+
+    print("== Testing RowColumnOrdinalDataset (single-instance referring) ==")
+
+    for i in range(5):
+        result = dataset()
+        if result is None:
+            print(f"[{i+1}] Failed to generate sample.")
+            continue
+
+        img, txt, mask = result  # mask 是二值的，只包含目标 instance
+
+        print(f"Referring text: {txt}")
+        print(f"Image shape: {img.shape}, dtype: {img.dtype}")
+        print(f"Mask unique values: {np.unique(mask)}")  # 应该是 [0, 1]
+
+        # Prepare image
+        vis_img = img.copy()
+        if vis_img.max() <= 1.0:
+            vis_img = (vis_img * 255).astype(np.uint8)
+        vis_img = cv2.cvtColor(vis_img, cv2.COLOR_RGB2BGR)
+
+        # Create colored mask for target instance (green)
+        target_mask = (mask > 0).astype(np.uint8) * 255
+        target_mask_colored = np.zeros_like(vis_img)
+        target_mask_colored[:, :, 1] = target_mask  # Green channel
+
+        # Overlay
+        overlay = cv2.addWeighted(vis_img, 0.6, target_mask_colored, 0.4, 0)
+
+        # Add text
+        cv2.putText(overlay, txt, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
+        # Save
+        save_path = f"visualizations/synthetics/referring_example_{i+1}.png"
+        cv2.imwrite(save_path, overlay)
+        print(f"Saved to {save_path}\n")
     
     
     

@@ -1,7 +1,7 @@
 #!/bin/bash
 mkdir -p ./models/Gref
 
-gpu="2,3,4,5"
+gpu="4,5,6,7"
 export CUDA_VISIBLE_DEVICES=$gpu
 np=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n' | wc -l)
 
@@ -13,7 +13,7 @@ torchrun \
     --dataset refcocog \
     --splitBy google \
     --model_id gref_google \
-    --pseudo_dataset unc \
+    --pseudo_dataset Gref unc \
     --batch-size 12 \
     --lr 0.00005 \
     --workers 12 \
@@ -24,4 +24,4 @@ torchrun \
     --img_size 480 \
     --pin_mem true \
     --ck_bert ./bert/models \
-    2>&1 | tee ./models/gref_google/output
+    2>&1 | tee ./models/pseudo_consistent_gref_google_mix/output
