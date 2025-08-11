@@ -9,4 +9,4 @@ python test_with_candidates.py \
     --window12 \
     --img_size 480 \
     --ck_bert ./bert/models \
-    --device cuda:0
+    --device cuda:4
