@@ -17,7 +17,8 @@ import numpy as np
 import torch.nn.functional as F
 import gc
 from collections import OrderedDict
-import data.dataset_pseudo as pseudo
+# import data.dataset_pseudo as pseudo
+import data.dataset_multi as pseudo
 from loss import LabelCriterion, ConsistentDiceLoss, ConsistentKLLoss, LabelDiceLoss
 
 
