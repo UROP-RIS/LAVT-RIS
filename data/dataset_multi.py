@@ -63,8 +63,16 @@ class PseudoLabelDataset(data.Dataset):
         txt = data_dict['sent_batch'][0]
         
         ## Augment text
-        data_id = self.extract_number(os.path.basename(index_path))
+        data_id = self.extract_number(os.path.basename(img_txt_gt_path))
         augment_text_path = os.path.join(self.augment_text_root, f"{self.dataset}_{self.split}_augtext_{data_id}.json")
+        # print()
+        # print("====" * 20)
+        # print("Index path: ", index_path)
+        # print("Original text path: ", img_txt_gt_path)
+        # print("Augment_text path:", augment_text_path)
+        # print("====" * 20)
+        # print()
+
         if os.path.exists(augment_text_path):
             aug_data = json.load(open(augment_text_path, 'r'))
             aug_text_keys = list(aug_data.keys())[1:]
@@ -79,6 +87,9 @@ class PseudoLabelDataset(data.Dataset):
         
         if aug_txt == txt:
             print(f"Warning: Augmented text is the same as original text for index {idx}. Using original text.")
+        
+        # print(aug_txt, "augmented text")
+        # print(txt, "original text")
         
         # Transform mask and image
         mask = Image.fromarray(mask_np.astype(np.uint8)).convert("P")
@@ -104,7 +115,7 @@ class PseudoLabelDataset(data.Dataset):
         return batch
     
     def extract_number(self, filename):
-        match = re.search(r'_(\d+)\.json$', filename)
+        match = re.search(r'_(\d+)\.\w+$', filename)
         return int(match.group(1)) if match else -1
     
     def tokenize_text(self, text: str) -> tuple[torch.Tensor, torch.Tensor]:
@@ -169,12 +180,12 @@ if __name__ == "__main__":
     
     for i in random_choices:
         data_dict = dataset[i]
-        print(f"Index {i}:")
-        print(f"Image shape: {data_dict['img'].shape}")
-        print(f"Target shape: {data_dict['target'].shape}")
-        print(f"Text: {data_dict['txt'].size()}")
-        print(f"Augmented Text: {data_dict['aug_txt'].size()}")
-        print(f"Attention Mask: {data_dict['attention_mask'].size()}")
-        print(f"Augmented Attention Mask: {data_dict['aug_attention_mask'].size()}")
+        # print(f"Index {i}:")
+        # print(f"Image shape: {data_dict['img'].shape}")
+        # print(f"Target shape: {data_dict['target'].shape}")
+        # print(f"Text: {data_dict['txt'].size()}")
+        # print(f"Augmented Text: {data_dict['aug_txt'].size()}")
+        # print(f"Attention Mask: {data_dict['attention_mask'].size()}")
+        # print(f"Augmented Attention Mask: {data_dict['aug_attention_mask'].size()}")
 
         
