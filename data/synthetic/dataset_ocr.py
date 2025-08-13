@@ -47,7 +47,7 @@ class NumberOcrDataset(SynthesisDataset):
             idx = np.random.randint(0, len(self.index))
         data = self.load(idx)
         img_array = data['img']
-        noun = data['txt'] 
+        noun = data['noun'] 
         mask = data['mask']
         other_img = None
         other_mask = None
@@ -57,7 +57,7 @@ class NumberOcrDataset(SynthesisDataset):
             other_data = self.load(other_idx)
             other_img = other_data['img']
             other_mask = other_data['mask']
-            other_txt = other_data["txt"]
+            other_txt = other_data["noun"]
         return {
             "this_data": {
                 "img": img_array,
@@ -103,19 +103,24 @@ class NumberOcrDataset(SynthesisDataset):
             return "two hundred"
     
     @staticmethod
-    def generate_txt(noun: str, number: int):
+    def generate_txt(noun: str, number: int, seq: int = 1):
+        is_target = (seq == 0)
         list_of_template = [
             f"{noun} marked {number}",
             f"{number} {noun}",
-            str(number),
             f"{noun} marked {NumberOcrDataset.number_to_words(number)}",
             f"{NumberOcrDataset.number_to_words(number)} {noun}",
-            NumberOcrDataset.number_to_words(number),
             f"{noun} {number}",
             f"{noun} {NumberOcrDataset.number_to_words(number)}",
             f"{noun} with {number}",
             f"{noun} with {NumberOcrDataset.number_to_words(number)}"
         ]
+        easy_list = [
+            str(number),
+            NumberOcrDataset.number_to_words(number),
+        ]
+        if not is_target:
+            list_of_template.extend(easy_list)
         human_word_list = [
                             'man', 'male', 'player', 'batter', 'catcher', 
                             'umpire', 'child', 'boy', 'girl', 'person', 
@@ -512,7 +517,7 @@ class NumberOcrDataset(SynthesisDataset):
         other_mask, other_patch = (torch.tensor(other_mask, dtype=torch.float32).unsqueeze(0), torch.tensor(other_patch, dtype=torch.float32).permute(2, 0, 1)) \
                                     if other_mask is not None else (None, None)
         instance_list = [(NumberOcrDataset.put_number_into_image(patch, patch_mask, number_image_mask[i][0], number_image_mask[i][1]), patch_mask)for i in range(len(number_image_mask))]
-        text_list = [NumberOcrDataset.generate_txt(data_dict["this_data"]["txt"], conditions["number_list"][i]) for i in range(len(number_image_mask))]
+        text_list = [NumberOcrDataset.generate_txt(data_dict["this_data"]["txt"], conditions["number_list"][i], i) for i in range(len(number_image_mask))]
         if other_mask is not None:
             instance_list.append((NumberOcrDataset.put_number_into_image(other_patch, other_mask, number_image_mask[0][0], number_image_mask[0][1]), other_mask))
             text_list.append(NumberOcrDataset.generate_txt(data_dict["other_data"]["txt"], conditions["number_list"][0]))
