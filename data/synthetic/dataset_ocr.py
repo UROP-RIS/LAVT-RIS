@@ -168,6 +168,52 @@ class NumberOcrDataset(SynthesisDataset):
         return mask_cropped, patch_cropped
     
     @staticmethod
+    def find_best_fit_rect_fast(mask: torch.Tensor, h: int, w: int):
+        """快速版本：使用预计算的积分图"""
+        device = mask.device
+        mask = mask.squeeze(0).float()  # (H, W)
+        H, W = mask.shape
+        
+        # 使用积分图加速区域和计算
+        integral = torch.cumsum(torch.cumsum(mask, dim=0), dim=1)
+        
+        def get_sum(y1, x1, y2, x2):
+            """O(1)时间计算矩形区域和"""
+            if y1 == 0 and x1 == 0:
+                return integral[y2, x2]
+            elif y1 == 0:
+                return integral[y2, x2] - integral[y2, x1-1]
+            elif x1 == 0:
+                return integral[y2, x2] - integral[y1-1, x2]
+            else:
+                return integral[y2, x2] - integral[y1-1, x2] - integral[y2, x1-1] + integral[y1-1, x1-1]
+        
+        max_scale = min(H / h, W / w)
+        best_scale = 0.0
+        best_pos = (0, 0)
+        
+        # 减少二分查找次数，使用更大的步长
+        for scale in np.arange(max_scale, 0, -max_scale/20):  # 只检查20个scale
+            h_s, w_s = int(scale * h), int(scale * w)
+            if h_s <= 0 or w_s <= 0 or h_s > H or w_s > W:
+                continue
+                
+            # 快速检查所有可能位置
+            for i in range(0, H - h_s + 1, max(1, (H-h_s)//10)):  # 减少位置检查
+                for j in range(0, W - w_s + 1, max(1, (W-w_s)//10)):
+                    if get_sum(i, j, i + h_s - 1, j + w_s - 1) == h_s * w_s:
+                        best_scale = scale
+                        best_pos = (i, j)
+                        return i, j, h_s, w_s
+        
+        # 如果没找到完美匹配，返回缩放到最小可行尺寸
+        min_scale = max_scale * 0.5
+        h_s, w_s = int(min_scale * h), int(min_scale * w)
+        top = (H - h_s) // 2
+        left = (W - w_s) // 2
+        return top, left, h_s, w_s
+    
+    @staticmethod
     def find_best_fit_rect(mask: torch.Tensor, h: int, w: int):
         """
         找到原始矩形 (h, w) 等比例缩放后，能完全放入 mask==1 区域的最大版本。
@@ -261,10 +307,11 @@ class NumberOcrDataset(SynthesisDataset):
 
         return False, 0, 0
     
+
     @staticmethod
     def put_number_into_image(patch: torch.tensor, patch_mask: torch.tensor, number_img: torch.tensor, number_mask: torch.tensor):
         _, h, w = number_img.shape  # 获取数字图像的尺寸
-        top, left, h_prime, w_prime = NumberOcrDataset.find_best_fit_rect(patch_mask, h, w)
+        top, left, h_prime, w_prime = NumberOcrDataset.find_best_fit_rect_fast(patch_mask, h, w)
         
         # resize the number_img, number_mask from h, w to h_prime, w_prime
         number_img = F.interpolate(number_img.unsqueeze(0), size=(h_prime, w_prime), mode="bilinear").squeeze(0)
@@ -492,7 +539,8 @@ if __name__ == "__main__":
         max_tokens=20,
         load_raw_data = True,
     )
-    
+    import time
+    start = time.time()
     for i in range(100):
         result = dataset()
         if result is None:
@@ -527,3 +575,5 @@ if __name__ == "__main__":
         cv2.imwrite(save_path, overlay)
         print(f"Saved to {save_path}\n")
     
+    end = time.time()
+    print(f"Time taken for iteration {100}: {end - start:.2f} seconds")
