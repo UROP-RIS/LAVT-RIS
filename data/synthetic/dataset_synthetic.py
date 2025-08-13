@@ -19,6 +19,7 @@ class SynthesisDataset:
                  split: str,
                  max_tokens: int = 20, 
                  load_raw_data: bool = False,
+                 use_shorter_dict: bool = True,
                  **kwargs):
         self.prob = prob
         self.max_tokens = max_tokens
@@ -27,11 +28,12 @@ class SynthesisDataset:
         self.root = root
         self.dataset = dataset
         self.split = split
+        self.use_shorter_dict = use_shorter_dict
         
         self.index_root = f"{self.root}/{self.dataset}/{self.split}_purified_mask_list.json"
         self.image_txt_gt_root = f"{self.root}/{self.dataset}/{self.split}_batch"
         self.pseudo_label_root = f"{self.root}/{self.dataset}/{self.split}_mask_newB_batch"
-        self.noun_dict_path = f"{self.root}/{self.dataset}/{self.dataset}_noun/{self.dataset}_{self.split}_dict.npy"
+        self.noun_dict_path = f"{self.root}/{self.dataset}/{self.dataset}_noun/{self.dataset}_{self.split}_dict.npy" if not use_shorter_dict else f"{self.root}/{self.dataset}/{self.dataset}_noun/{self.dataset}_noun.json"
         
         assert os.path.exists(self.index_root), f"Index file {self.index_root} does not exist."
         assert os.path.exists(self.image_txt_gt_root), f"Image and text ground truth root {self.image_txt_gt_root} does not exist."
@@ -41,9 +43,15 @@ class SynthesisDataset:
         with open(self.index_root, 'r') as f:
             self.index = json.load(f)
         
-        with open(self.noun_dict_path, 'rb') as f:
-            self.noun_dict = np.load(f, allow_pickle=True).item()
+        if not self.use_shorter_dict:
+            with open(self.noun_dict_path, 'rb') as f:
+                self.noun_dict = np.load(f, allow_pickle=True).item()
         
+        else:
+            with open(self.noun_dict_path, 'r') as f:
+                self.noun_dict = json.load(f)
+                print("using shorter dict")
+
         ## Image and mask transforms
         transforms = [T.Resize(480, 480),
                       T.ToTensor(),
