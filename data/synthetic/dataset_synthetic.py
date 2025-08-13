@@ -110,6 +110,29 @@ class SynthesisDataset:
             noun = txt
         # img: np.array; txt: str; mask: np.array; noun: str
         return {"img": img, "txt": txt, "mask": mask, "noun": noun}
+    
+    def paste(self, bg: np.ndarray, patch: np.ndarray, patch_mask: np.ndarray, x: int, y: int) -> tuple[np.ndarray, np.ndarray]:
+        h, w = patch.shape[:2]
+        bg_h, bg_w = bg.shape[:2]
+        x1, y1 = np.clip(x, 0, bg_w - w), np.clip(y, 0, bg_h - h)
+        x2, y2 = x1 + w, y1 + h
+        bg[y1:y2, x1:x2] = np.where(patch_mask[..., None] > 0, patch, bg[y1:y2, x1:x2])
+        full_mask = np.zeros((bg_h, bg_w), dtype=np.uint8)
+        full_mask[y1:y2, x1:x2] = np.where(patch_mask > 0, 1, 0)
+        return bg, full_mask
+
+    
+    def _crop_mask_and_patch(self, mask: np.ndarray, patch: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Crop the mask and patch to the bounding box of the mask.
+        """
+        coords = np.where(mask)
+        if len(coords[0]) == 0:
+            return None, None
+        y1, y2, x1, x2 = coords[0].min(), coords[0].max(), coords[1].min(), coords[1].max()
+        patch_cropped = patch[y1:y2+1, x1:x2+1]
+        mask_cropped = mask[y1:y2+1, x1:x2+1]
+        return mask_cropped, patch_cropped
         
     
     def tokenize_text(self, text: str) -> tuple[torch.Tensor, torch.Tensor]: 
