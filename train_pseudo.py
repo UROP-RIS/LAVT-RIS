@@ -17,8 +17,8 @@ import numpy as np
 import torch.nn.functional as F
 import gc
 from collections import OrderedDict
-# import data.dataset_pseudo as pseudo
-import data.dataset_multi as pseudo
+import data.dataset_pseudo as pseudo
+# import data.dataset_multi as pseudo
 from loss import LabelCriterion, ConsistentDiceLoss, ConsistentKLLoss, LabelDiceLoss
 
 
@@ -110,7 +110,17 @@ def evaluate(model, data_loader, bert_model):
                        (str(eval_seg_iou_list[n_eval_iou]), seg_correct[n_eval_iou] * 100. / seg_total)
     results_str += '    overall IoU = %.2f\n' % (cum_I * 100. / cum_U)
     print(results_str)
-    return 100 * iou, 100 * cum_I / cum_U
+    return 100 * mIoU, 100 * cum_I / cum_U
+    # return 100 * iou, 100 * mIoU
+    
+def freeze_model(model):
+    for param in model.parameters():
+        param.requires_grad = False
+
+def unfreeze_model(model):
+    for param in model.parameters():
+        param.requires_grad = True
+
 
 def train_one_epoch(model, criterion, optimizer, data_loader, lr_scheduler, epoch, print_freq,
                     iterations, bert_model, lambda_consistency=1.0):
@@ -134,47 +144,47 @@ def train_one_epoch(model, criterion, optimizer, data_loader, lr_scheduler, epoc
         attentions = data['attention_mask']
         aug_sentences = data['aug_txt']
         aug_attentions = data['aug_attention_mask']
+        aug_image = image.clone()
+        
+        
         image = image.cuda(non_blocking=True)
         target = target.cuda(non_blocking=True)
         sentences = sentences.cuda(non_blocking=True).squeeze(1)
         attentions = attentions.cuda(non_blocking=True).squeeze(1)
         aug_sentences = aug_sentences.cuda(non_blocking=True).squeeze(1)
         aug_attentions = aug_attentions.cuda(non_blocking=True).squeeze(1)
+        aug_image = aug_image.cuda(non_blocking=True)
 
         with autocast():
             if bert_model is not None:
                 bert_model.eval()
                 model.eval()
-                for param in model.parameters():
-                    param.requires_grad = False
-                for param in bert_model.parameters():
-                    param.requires_grad = False
-                with torch.no_grad():  # 可选：freeze BERT
-                    last_hidden_states = bert_model(sentences, attention_mask=attentions)[0].detach()
-                    embedding = last_hidden_states.permute(0, 2, 1)
-                    l_mask = attentions.unsqueeze(-1)
-
-                    # 教师输出（原始输入）
-                    output_teacher = model(image, embedding, l_mask=l_mask).detach()
-
-                for param in model.parameters():
-                    param.requires_grad = True
-                for param in bert_model.parameters():
-                    param.requires_grad = True
+                freeze_model(model)
+                freeze_model(bert_model)
+                with torch.no_grad():
+                    aug_last_hidden_states = bert_model(aug_sentences, attention_mask=aug_attentions)[0]
+                    aug_embedding = aug_last_hidden_states.permute(0, 2, 1)
+                    aug_l_mask = aug_attentions.unsqueeze(-1)
+                    output_student = model(aug_image, aug_embedding, l_mask=aug_l_mask)
+                
+                unfreeze_model(model)
+                unfreeze_model(bert_model)
                 bert_model.train()
-                model.train()  # 恢复模型训练模式
-                # 学生输出（增强输入）
-                aug_last_hidden_states = bert_model(aug_sentences, attention_mask=aug_attentions)[0]
-                aug_embedding = aug_last_hidden_states.permute(0, 2, 1)
-                aug_l_mask = aug_attentions.unsqueeze(-1)
-                output_student = model(image, aug_embedding, l_mask=aug_l_mask)
+                model.train()
+                last_hidden_states = bert_model(sentences, attention_mask=attentions)[0]
+                embedding = last_hidden_states.permute(0, 2, 1)
+                l_mask = attentions.unsqueeze(-1)
+                output_teacher = model(image, embedding, l_mask=l_mask)
 
             else:
-                with torch.no_grad():
-                    output_teacher = model(image, sentences, l_mask=attentions)
-                output_student = model(image, aug_sentences, l_mask=aug_attentions)
-            label_loss = criterion(output_student, target)
-            consistency_loss = consistent_loss_fn(output_teacher, output_student, scale_factor=lambda_consistency)
+                model.eval()
+                output_teacher = model(image, sentences, l_mask=attentions)
+                model.train()
+                output_student = model(aug_image, aug_sentences, l_mask=aug_attentions)
+                
+            label_loss = criterion(output_teacher, target)
+            output_student_ref = output_student.clone().detach()
+            consistency_loss = consistent_loss_fn(output_student_ref, output_teacher , scale_factor=lambda_consistency)
             total_loss = label_loss + consistency_loss
 
         optimizer.zero_grad()
@@ -320,7 +330,8 @@ def main(args):
     # housekeeping
     start_time = time.time()
     iterations = 0
-    best_oIoU = -0.1
+    # best_oIoU = -0.1
+    best_mIoU = -0.1
 
     # resume training (optimizer, lr scheduler, and the epoch)
     if args.resume:
@@ -340,7 +351,7 @@ def main(args):
         iou, overallIoU = evaluate(model, data_loader_test, bert_model)
         print('Average object IoU {}'.format(iou))
         print('Overall IoU {}'.format(overallIoU))
-        save_checkpoint = (best_oIoU < overallIoU)
+        save_checkpoint = (best_mIoU < iou)
         if save_checkpoint:
             print('Better epoch: {}\n'.format(epoch))
             if single_bert_model is not None:
@@ -353,7 +364,8 @@ def main(args):
                                 'lr_scheduler': lr_scheduler.state_dict()}
             utils.save_on_master(dict_to_save, os.path.join(args.output_dir,
                                                             'model_best_{}.pth'.format(args.model_id)))
-            best_oIoU = overallIoU
+            # best_oIoU = overallIoU
+            best_mIoU = iou
 
     # summarize
     total_time = time.time() - start_time
