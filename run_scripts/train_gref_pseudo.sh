@@ -1,13 +1,13 @@
 #!/bin/bash
 mkdir -p ./models/Gref
 
-gpu="4,5,6,7"
+gpu="0,1,2,3"
 export CUDA_VISIBLE_DEVICES=$gpu
 np=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n' | wc -l)
 
 torchrun \
     --nproc_per_node=$np \
-    --master_port=12345 \
+    --master_port=12346 \
     train_pseudo.py \
     --model lavt \
     --dataset refcocog \
@@ -24,4 +24,4 @@ torchrun \
     --img_size 480 \
     --pin_mem true \
     --ck_bert ./bert/models \
-    2>&1 | tee ./models/pseudo_consistent_gref_google_mix/output
+    2>&1 | tee ./models/gref_google/output

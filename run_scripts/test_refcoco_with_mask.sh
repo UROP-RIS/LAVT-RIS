@@ -3,10 +3,10 @@ python test_with_candidates.py \
     --swin_type base \
     --dataset unc \
     --split testB  \
-    --resume ./checkpoints/model_best_refcoco.pth \
+    --resume ./checkpoints/refcoco_correction.pth \
     --workers 4 \
     --ddp_trained_weights \
     --window12 \
     --img_size 480 \
     --ck_bert ./bert/models \
-    --device cuda:7
+    --device cuda:2
