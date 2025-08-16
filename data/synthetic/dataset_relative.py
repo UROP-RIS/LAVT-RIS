@@ -53,99 +53,106 @@ def visualize_layout(placed_obj, objects, tree, idx_to_noun, canvas_width, canva
     print(f"Saved to {output_path}")
     return canvas
 
-min_gap = 10
-overlap_tol = 20
-small_offset = 5
-large_offset = 30
 RELATIONS = {
     "left": {
         "templates": [
-            "{A} on the left of {B}",
-            "the {A} to the left of the {B}",
+            "{A} is to the left of {B}",
+            "the {A} located to the left of the {B}",
+            "the {A} positioned on the left side of the {B}",
+            "the {A} seen on the left relative to the {B}",
+            "the {A} that is on the left when facing the {B}",
+            "the {A} situated to the left of the {B}",
+            "the {A} standing to the left of the {B}",
+            "the {A} placed to the left of the {B}",
+            "the {A} aligned to the left of the {B}",
+            "the {A} that appears to the left of the {B}"
         ]
     },
     "right": {
         "templates": [
-            "{A} on the right of {B}",
-            "the {A} beside the {B}, on its right",
+            "{A} is to the right of {B}",
+            "the {A} located to the right of the {B}",
+            "the {A} positioned on the right side of the {B}",
+            "the {A} seen on the right relative to the {B}",
+            "the {A} that is on the right when facing the {B}",
+            "the {A} situated to the right of the {B}",
+            "the {A} standing to the right of the {B}",
+            "the {A} placed to the right of the {B}",
+            "the {A} aligned to the right of the {B}",
+            "the {A} that appears to the right of the {B}"
         ]
     },
     "above": {
         "templates": [
-            "{A} above the {B}",
+            "{A} is above the {B}",
+            "the {A} located directly above the {B}",
             "the {A} positioned over the {B}",
-            "the {B} with the {A} directly overhead",
+            "the {A} floating above the {B}",
+            "the {A} suspended above the {B}",
             "the {A} sitting on top of the {B}",
-            "the {A} hovering above the {B}",
-            "the {A} placed above the {B}",
-            "the {A} located above the {B}",
-            "the {A} on {B}",
-            "the {A} at the top of the {B}",
-            "the {A} positioned at the top of the {B}",
-            "the {A} situated at the top of the {B}",
+            "the {A} resting on the upper part of the {B}",
             "the {A} placed at the top of the {B}",
-            "the {A} lying at the top of the {B}",
-            "the {A} resting at the top of the {B}",
-            "the {A} positioned above the {B}",
-            "the {A} situated above the {B}",
+            "the {A} that is higher than the {B}",
+            "the {A} seen above the {B} in the scene"
         ]
     },
     "below": {
         "templates": [
-            "{A} below the {B}",
-            "the {A} under the {B}",
-            "the {A} beneath the {B}",
+            "{A} is below the {B}",
+            "the {A} located directly below the {B}",
             "the {A} positioned under the {B}",
-            "the {A} sitting below the {B}",
-            "the {A} located below the {B}",
-            "the {A} on the bottom of the {B}",
-            "the {A} at the bottom of the {B}",
+            "the {A} beneath the {B}",
             "the {A} underneath the {B}",
-            "the {A} positioned below the {B}",
-            "the {A} situated below the {B}",
-            "the {A} placed below the {B}",
-            "the {A} lying below the {B}",
-            "the {A} resting below the {B}",
-            "the {A} positioned at the bottom of the {B}",
-            "the {A} situated at the bottom of the {B}",
-            "the {A} placed at the bottom of the {B}",
-            "the {A} lying at the bottom of the {B}",
-            "the {A} resting at the bottom of the {B}"
+            "the {A} sitting at the bottom of the {B}",
+            "the {A} resting under the {B}",
+            "the {A} placed beneath the {B}",
+            "the {A} that is lower than the {B}",
+            "the {A} seen below the {B} in the scene"
         ]
     },
     "behind": {
         "templates": [
-            "the {A} behind the {B}",
-            "the {A} at the back of the {B}",
+            "{A} is behind the {B}",
+            "the {A} located at the back of the {B}",
             "the {A} positioned behind the {B}",
-            "the {A} located behind the {B}",
-            "the {A} situated at the back fo the {B}",
-            
+            "the {A} hidden behind the {B}",
+            "the {A} obscured by the {B}",
+            "the {A} situated at the rear of the {B}",
+            "the {A} that is farther from the viewer than the {B}",
+            "the {A} seen behind the {B} from this viewpoint",
+            "the {A} that lies in the shadow of the {B}",
+            "the {A} not visible because it's behind the {B}"
         ]
     },
     "in_front_of": {
         "templates": [
-            "the {A} in front of the {B}",
-            "the {A} blocking the view of the {B}",
-            "the {A} positioned in front of the {B}",
+            "{A} is in front of the {B}",
             "the {A} located in front of the {B}",
-            "the {A} situated in front of the {B}",
-            "the {A} at the front of the {B}",
+            "the {A} positioned ahead of the {B}",
+            "the {A} blocking the view of the {B}",
+            "the {A} closer to the viewer than the {B}",
+            "the {A} seen in front of the {B} from this angle",
             "the {A} standing in front of the {B}",
+            "the {A} that appears before the {B}",
+            "the {A} partially occluding the {B}",
+            "the {A} that is in the foreground relative to the {B}"
         ]
     },
     "near": {
-    "templates": [
-        "the {A} near the {B}",
-        "the {A} close to the {B}",
-        "the {A} nearby the {B}",
-        "the {A} in the vicinity of the {B}",
-        "the {A} in proximity to the {B}",
-        "the {A} adjacent to the {B}"
-    ]
+        "templates": [
+            "{A} is near the {B}",
+            "the {A} located close to the {B}",
+            "the {A} in the vicinity of the {B}",
+            "the {A} in proximity to the {B}",
+            "the {A} adjacent to the {B}",
+            "the {A} beside the {B}",
+            "the {A} nearby the {B}",
+            "the {A} within a short distance from the {B}",
+            "the {A} that is spatially close to the {B}",
+            "the {A} that appears near the {B} in the image"
+        ]
+    }
 }
-}
-
 class RelativeDataset(SynthesisDataset):
     
     def __init__(self, prob: float, root: str, dataset: str, split: str, max_tokens: int = 20, **kwargs):
@@ -161,12 +168,12 @@ class RelativeDataset(SynthesisDataset):
                 return data
         return data
     
-    def load_objects(self, num_objects: int) -> list:
+    def load_objects(self, num_distinc_objs: int, copy_num = 0) -> list:
         """
         Load a list of objects from the noun dictionary.
         """
         objects = []
-        for idx in range(num_objects):
+        for idx in range(num_distinc_objs):
             raw = self.load_until_success()
             crop_mask, crop_img = self._crop_mask_and_patch(raw["mask"], raw["img"])
             objects.append(
@@ -180,6 +187,12 @@ class RelativeDataset(SynthesisDataset):
                     "h": crop_mask.shape[0],
                 }
             )
+        if copy_num > 0:
+            copied = random.sample(objects, 1)[0]
+            for _ in range(copy_num):
+                new_obj = copied.copy()
+                new_obj["idx"] = len(objects)
+                objects.append(new_obj)
         return objects
     
     def select_anchor(self, objects):
@@ -309,7 +322,7 @@ class RelativeDataset(SynthesisDataset):
         min_gap = 10
         max_retry_per_node = 5
         max_retry_root = 5
-        iou_threshold = 0.4
+        iou_threshold = 0.1
 
         def get_bbox(cx, cy, w, h):
             return [cx - w/2, cy - h/2, cx + w/2, cy + h/2]
@@ -357,7 +370,7 @@ class RelativeDataset(SynthesisDataset):
                     cy = random.uniform(top_edge_min + ch / 2, bottom_edge_max - ch / 2)
                     cx = random.uniform(parent_cx - pw * 0.3, parent_cx + pw * 0.3)
                 elif relation == "near":
-                    radius_max = 0.5 * math.sqrt(pw**2 + ph**2)
+                    radius_max = 0.2 * math.sqrt(pw**2 + ph**2)
                     radius_min = 0.2 * radius_max
                     angle = random.uniform(0, 2 * math.pi)
                     dist = random.uniform(radius_min, radius_max)
@@ -574,7 +587,9 @@ class RelativeDataset(SynthesisDataset):
             canvas: 合成图像 (H, W, 3)
             final_mask: referring instance 的可见部分 mask (H, W)
         """
-        canvas = np.ones((canvas_height, canvas_width, 3), dtype=np.uint8) * 128  # 灰色背景
+        # canvas = np.ones((canvas_height, canvas_width, 3), dtype=np.uint8) * 128  # 灰色背景
+        bg, bg_color = self.create_scrambled_background_from_single_image(None, rows = 16, cols = 16, blur_kernel_ratio=0.04)
+        canvas = cv2.resize(bg, (canvas_width, canvas_height), interpolation=cv2.INTER_LINEAR)
         final_mask = np.zeros((canvas_height, canvas_width), dtype=np.uint8)  # 指代对象的初始 mask
         idx_to_obj = {obj['idx']: obj for obj in objects}  # 快速查找
 
@@ -623,10 +638,12 @@ class RelativeDataset(SynthesisDataset):
         if idx is None:
             idx = np.random.randint(0, len(self.index))
         
-        objects = self.load_objects(6)
+        objects = self.load_objects(num_distinc_objs=4, copy_num=random.randint(0, 2))
         trees = self.build_tree_bfs(objects)
         idx_to_noun = {obj['idx']: obj['noun'] for obj in objects}
-        chosen = random.choice(range(len(objects)))
+        
+        ## Filter out the root
+        chosen = random.choice(list(set(range(len(objects))) - set([trees["idx"]])))
 
         referring_text = dataset.generate_referring_text(
             dataset.get_path_to_node(trees, objects[chosen]['idx']), idx_to_noun

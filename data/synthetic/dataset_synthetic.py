@@ -10,6 +10,7 @@ import torch
 from abc import abstractmethod
 import transforms as T
 import cv2
+import random
 
 class SynthesisDataset:
     
@@ -159,6 +160,70 @@ class SynthesisDataset:
 
         return padded
     
+    def create_patched_background(self, target_h, target_w, patch_size_range=(64, 256), num_patches=25, blur_kernel_ratio=0.02, target_brightness=None):
+        """
+        创建一个由随机 patch 拼接并模糊融合的背景，支持亮度匹配，用于提升合成图像真实性。
+
+        Args:
+            target_h (int): 目标背景高度
+            target_w (int): 目标背景宽度
+            patch_size_range (tuple): 裁剪 patch 的最小和最大尺寸 (min_size, max_size)
+            num_patches (int): 用于拼接的 patch 数量
+            blur_kernel_ratio (float): 模糊核大小占 min(target_h, target_w) 的比例
+            target_brightness (float or None): 指定目标亮度值（0-255），若为 None 则从 patch 自动计算
+
+        Returns:
+            bg (np.ndarray): (H, W, 3) uint8，合成背景图
+            bg_brightness (float): 返回背景的平均亮度，便于后续 patch 调整
+        """
+        bg = np.zeros((target_h, target_w, 3), dtype=np.uint8)
+        patches = []
+
+        # === Step 1: 随机采样并裁剪多个 patch ===
+        for _ in range(num_patches):
+            idx = np.random.randint(0, len(self.index))
+            data = self.load(idx)
+            img = data['img']
+            h, w = img.shape[:2]
+
+            patch_size = random.randint(patch_size_range[0], patch_size_range[1])
+            if h <= patch_size or w <= patch_size:
+                continue
+
+            x = np.random.randint(0, w - patch_size)
+            y = np.random.randint(0, h - patch_size)
+            patch = img[y:y+patch_size, x:x+patch_size]
+            patches.append(patch)
+
+        # === Step 2: 随机打乱并贴到画布上 ===
+        random.shuffle(patches)
+        for patch in patches:
+            ph, pw = patch.shape[:2]
+            max_x = target_w - pw
+            max_y = target_h - ph
+            if max_x <= 0 or max_y <= 0:
+                continue
+            x = np.random.randint(0, max_x + 1)
+            y = np.random.randint(0, max_y + 1)
+            bg[y:y+ph, x:x+pw] = patch
+
+        # === Step 3: 全局模糊融合 ===
+        kernel_size = int(blur_kernel_ratio * min(target_h, target_w))
+        kernel_size = max(31, kernel_size // 2 * 2 + 1)  # 奇数
+        bg = cv2.blur(bg, (kernel_size, kernel_size))
+
+        # === Step 4: 亮度匹配准备 —— 计算背景亮度 ===
+        bg_gray = cv2.cvtColor(bg, cv2.COLOR_RGB2GRAY)
+        bg_brightness = bg_gray.mean()
+
+        # 如果指定了目标亮度，调整整个背景
+        if target_brightness is not None:
+            ratio = target_brightness / (bg_brightness + 1e-5)
+            bg = np.clip(bg.astype(np.float32) * ratio, 0, 255).astype(np.uint8)
+            bg_brightness = target_brightness
+
+        return bg, bg_brightness
+    
     def paste(self, bg: np.ndarray, patch: np.ndarray, patch_mask: np.ndarray, x: int, y: int) -> tuple[np.ndarray, np.ndarray]:
         h, w = patch.shape[:2]
         bg_h, bg_w = bg.shape[:2]
@@ -224,8 +289,99 @@ class SynthesisDataset:
         attention_mask = [1] * len(encoded) + [0] * padding_length
         
         return torch.tensor(padded_ids).unsqueeze(0), torch.tensor(attention_mask).unsqueeze(0)
+    
+    def create_scrambled_background_from_single_image(self, bg_idx=None, rows=16, cols=16, blur_kernel_ratio=0.02):
+        """
+        从一张完整图像中裁剪 rows*cols 个 patch，打乱后重新拼接为同尺寸背景图。
+        
+        Args:
+            bg_idx (int or None): 背景图像索引，None 表示随机选择
+            rows (int): 行数
+            cols (int): 列数
+            blur_kernel_ratio (float): 模糊核大小占 min(H,W) 的比例
+
+        Returns:
+            bg (np.ndarray): (H, W, 3) uint8，打乱后的背景，尺寸与原图相同
+            bg_brightness (float): 背景平均亮度，用于前景亮度匹配
+        """
+        # === Step 1: 加载背景图像 ===
+        if bg_idx is None:
+            bg_idx = np.random.randint(0, len(self.index))
+        data = self.load(bg_idx)
+        bg_img = data['img']  # (H, W, 3)
+        h, w = bg_img.shape[:2]
+        
+        # kernel_size = int(blur_kernel_ratio * min(h, w))
+        # kernel_size = kernel_size // 2 * 2 + 1  # 奇数
+        # bg_img = cv2.blur(bg_img, (kernel_size, kernel_size))
+
+        total_patches = rows * cols
+        patch_h = h // rows
+        patch_w = w // cols
 
 
+        # === Step 2: 从原图中规则或随机裁剪 patch ===
+        patches = []
+        for _ in range(total_patches):
+            # 随机裁剪略小于目标尺寸的 patch（增加多样性）
+            dh = random.randint(int(0.9 * patch_h), patch_h)
+            dw = random.randint(int(0.9 * patch_w), patch_w)
+            y = np.random.randint(0, h - dh)
+            x = np.random.randint(0, w - dw)
+            patch = bg_img[y:y+dh, x:x+dw]
+            patches.append(patch)
+
+        # === Step 3: 打乱 patch 顺序 ===
+        random.shuffle(patches)
+
+        # === Step 4: 拼接成 rows × cols 网格，恢复为原图大小 ===
+        avg_color = bg_img.mean(axis=(0, 1))
+        reconstructed = np.ones((h, w, 3), dtype=np.uint8) * avg_color.astype(np.uint8)
+        for i in range(rows):
+            for j in range(cols):
+                patch = patches.pop()
+                ph, pw = patch.shape[:2]
+                y1 = i * patch_h
+                x1 = j * patch_w
+                y2 = y1 + ph
+                x2 = x1 + pw
+                # 缩放 patch 到目标格子大小（允许形变）
+                resized_patch = cv2.resize(patch, (patch_w, patch_h), interpolation=cv2.INTER_LINEAR)
+                reconstructed[y1:y1+patch_h, x1:x1+patch_w] = resized_patch
+            if not patches:
+                break  # 用完就停止
+
+
+        # === Step 5: 模糊融合，使拼接更自然 ===
+        kernel_size = int(blur_kernel_ratio * min(h, w))
+        kernel_size = kernel_size // 2 * 2 + 1
+        bg = cv2.blur(reconstructed, (kernel_size, kernel_size))
+        # === Step 6: 计算亮度 ===
+        bg_gray = cv2.cvtColor(bg, cv2.COLOR_RGB2GRAY)
+        bg_brightness = bg_gray.mean()
+
+        return bg, bg_brightness
+
+
+if __name__ == "__main__":
+    # Example usage
+    dataset = SynthesisDataset(prob=0.5, root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco", dataset='unc', split='train')
+    print(f"Dataset length: {len(dataset)}")
+    
+    # Load a sample
+    for i in range(10):
+        sample = dataset.load(0)
+        print(f"Sample text: {sample['txt']}")
+        
+        # Tokenize text
+        input_ids, attention_mask = dataset.tokenize_text(sample['txt'])
+        print(f"Input IDs: {input_ids}, Attention Mask: {attention_mask}")
+        
+        # Create scrambled background
+        bg, bg_brightness = dataset.create_scrambled_background_from_single_image(rows=16, cols=16, blur_kernel_ratio=0.04)
+        print(f"Background shape: {bg.shape}, Brightness: {bg_brightness}")
+        bg = cv2.cvtColor(bg, cv2.COLOR_RGB2BGR)
+        cv2.imwrite(f"visualizations/synthetics/scrambled_background_{i}.jpg", bg)
     
     
     
