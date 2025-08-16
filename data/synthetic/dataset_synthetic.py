@@ -22,6 +22,7 @@ class SynthesisDataset:
                  max_tokens: int = 20, 
                  load_raw_data: bool = False,
                  use_shorter_dict: bool = True,
+                 name = "",
                  **kwargs):
         self.prob = prob
         self.max_tokens = max_tokens
@@ -36,6 +37,8 @@ class SynthesisDataset:
         self.image_txt_gt_root = f"{self.root}/{self.dataset}/{self.split}_batch"
         self.pseudo_label_root = f"{self.root}/{self.dataset}/{self.split}_mask_newB_batch"
         self.noun_dict_path = f"{self.root}/{self.dataset}/{self.dataset}_noun/{self.dataset}_{self.split}_dict.npy" if not use_shorter_dict else f"{self.root}/{self.dataset}/{self.dataset}_noun/{self.dataset}_noun.json"
+        
+        self.name = name
         
         assert os.path.exists(self.index_root), f"Index file {self.index_root} does not exist."
         assert os.path.exists(self.image_txt_gt_root), f"Image and text ground truth root {self.image_txt_gt_root} does not exist."
@@ -362,26 +365,103 @@ class SynthesisDataset:
 
         return bg, bg_brightness
 
+class SynthesisDatasetWrapper(torch.utils.data.Dataset):
+    """
+    A wrapper for the SynthesisDataset to integrate with PyTorch's DataLoader.
+    """
+    
+    def __init__(self, length: int, datasets: list[SynthesisDataset], load_raw_data = False):
+        self.datasets = datasets
+        self.load_raw_data = load_raw_data
+        for dataset in datasets:
+            dataset.load_raw_data = load_raw_data
+        # Length is the number of samples to be generated
+        self.length = length
+        # For sampling probabilities
+        self.probs = [dataset.prob for dataset in datasets]
+        total_prob = sum(self.probs)
+        self.probs = [p / total_prob for p in self.probs]
+        
+        # Print the dataset name and the sampling probabilities
+        self.info = "\n"
+        self.info += "** Synthesis Dataset Basic Configurations **"
+        self.info += f"\nLength: {self.length}"
+        self.info += f"\nNumber of datasets: {len(self.datasets)}"
+        self.info += f"\nDebug Mode: {self.load_raw_data}"
+        self.info += "\n" + "=" * 40 + "\n"
+        
+        self.info += "** Dataset Configurations Information **\n"
+        self.info += "Dataset Name | Probability\n"
+        for i, dataset in enumerate(self.datasets):
+            self.info += f"Dataset {i}: {dataset.name} | Probability: {self.probs[i]:.2f}\n"
+        self.info += "=" * 40 + "\n"
+        print(self.info)
+    
+    def __str__(self):
+        return self.info
+    
+    def __len__(self):
+        return self.length
+    
+    def __getitem__(self, idx):
+        """
+        Get an item from the dataset based on the index.
+        
+        Args:
+            idx (int): Index of the item to retrieve, unused
+        
+        Returns:
+            dict: A dictionary containing the image, text, mask, and noun.
+        """
+        # Randomly select a dataset based on the defined probabilities
+        dataset_idx = np.random.choice(len(self.datasets), p=self.probs)
+        dataset = self.datasets[dataset_idx]
+        
+        # Load data from the selected dataset
+        data = dataset()
+        if self.load_raw_data:
+            return data
+        else:
+            img, mask, input_ids, attention_mask = data
+            return {
+                "img": img,
+                "target": mask,
+                "txt": input_ids,
+                "attention_mask": attention_mask,
+                "aug_txt": input_ids.clone(),                ## duplicate for compatibility
+                "aug_attention_mask": attention_mask.clone() ## duplicate for compatibility
+            }
+    
+    def get_raw_item(self):
+        assert self.load_raw_data, "Raw data loading is not enabled." 
+        dataset_idx = np.random.choice(len(self.datasets), p=self.probs)
+        dataset = self.datasets[dataset_idx]
+        data = dataset()
+        
+        return data
+        
+
 
 if __name__ == "__main__":
-    # Example usage
-    dataset = SynthesisDataset(prob=0.5, root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco", dataset='unc', split='train')
-    print(f"Dataset length: {len(dataset)}")
+    # # Example usage
+    # dataset = SynthesisDataset(prob=0.5, root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco", dataset='unc', split='train')
+    # print(f"Dataset length: {len(dataset)}")
     
-    # Load a sample
-    for i in range(10):
-        sample = dataset.load(0)
-        print(f"Sample text: {sample['txt']}")
+    # # Load a sample
+    # for i in range(10):
+    #     sample = dataset.load(0)
+    #     print(f"Sample text: {sample['txt']}")
         
-        # Tokenize text
-        input_ids, attention_mask = dataset.tokenize_text(sample['txt'])
-        print(f"Input IDs: {input_ids}, Attention Mask: {attention_mask}")
+    #     # Tokenize text
+    #     input_ids, attention_mask = dataset.tokenize_text(sample['txt'])
+    #     print(f"Input IDs: {input_ids}, Attention Mask: {attention_mask}")
         
-        # Create scrambled background
-        bg, bg_brightness = dataset.create_scrambled_background_from_single_image(rows=16, cols=16, blur_kernel_ratio=0.04)
-        print(f"Background shape: {bg.shape}, Brightness: {bg_brightness}")
-        bg = cv2.cvtColor(bg, cv2.COLOR_RGB2BGR)
-        cv2.imwrite(f"visualizations/synthetics/scrambled_background_{i}.jpg", bg)
+    #     # Create scrambled background
+    #     bg, bg_brightness = dataset.create_scrambled_background_from_single_image(rows=16, cols=16, blur_kernel_ratio=0.04)
+    #     print(f"Background shape: {bg.shape}, Brightness: {bg_brightness}")
+    #     bg = cv2.cvtColor(bg, cv2.COLOR_RGB2BGR)
+    #     cv2.imwrite(f"visualizations/synthetics/scrambled_background_{i}.jpg", bg)
+    pass 
     
     
     

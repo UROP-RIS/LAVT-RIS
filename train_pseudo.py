@@ -5,21 +5,18 @@ import os
 import time
 import torch
 import torch.utils.data
-from torch import nn
 from functools import reduce
 import operator
 from bert.modeling_bert import BertModel
-import torchvision
 from lib import segmentation
 import transforms as T
 import utils
 import numpy as np
-import torch.nn.functional as F
-import gc
-from collections import OrderedDict
 # import data.dataset_pseudo as pseudo
 import data.dataset_multi as pseudo
 from loss import LabelCriterion, ConsistentDiceLoss, ConsistentKLLoss, LabelDiceLoss
+import json
+from misc.common import make_object_from_config
 
 
 # ----------------------- 重要修改开始 -----------------------
@@ -209,33 +206,36 @@ def train_one_epoch(model, criterion, optimizer, data_loader, lr_scheduler, epoc
     return metric_logger.meters['loss'].global_avg, iterations
 
 def main(args):
-    # dataset, num_classes = get_dataset("train",
-    #                                    get_transform(args=args),
-    #                                    args=args)
-    if len(args.pseudo_dataset) > 1:
-        datasets = []
-        for dataset_name in args.pseudo_dataset:
-            datasets.append(
-                pseudo.get_dataset(
-                    root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
-                    augment_text_root="augmentation/data",
-                    dataset=dataset_name,
-                    split="train",
-                    max_tokens=20
-                )
-            )
-        dataset = ConcatDataset(datasets)
-    else:
-        dataset = pseudo.get_dataset(
-            root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
-            augment_text_root="augmentation/data",
-            dataset=args.pseudo_dataset[0],
-            split="train",
-            max_tokens=20
-        )
+    # # dataset, num_classes = get_dataset("train",
+    # #                                    get_transform(args=args),
+    # #                                    args=args)
+    # if len(args.pseudo_dataset) > 1:
+    #     datasets = []
+    #     for dataset_name in args.pseudo_dataset:
+    #         datasets.append(
+    #             pseudo.get_dataset(
+    #                 root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
+    #                 augment_text_root="augmentation/data",
+    #                 dataset=dataset_name,
+    #                 split="train",
+    #                 max_tokens=20
+    #             )
+    #         )
+    #     dataset = ConcatDataset(datasets)
+    # else:
+    #     dataset = pseudo.get_dataset(
+    #         root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
+    #         augment_text_root="augmentation/data",
+    #         dataset=args.pseudo_dataset[0],
+    #         split="train",
+    #         max_tokens=20
+    #     )
     dataset_test, _ = get_dataset("val",
                                   get_transform(args=args),
                                   args=args)
+    configs = json.load(open(args.configs, 'r'))
+    dataset = make_object_from_config(configs["train"]["dataset"])
+    # dataset_test = make_object_from_config(configs["val"]["dataset"])
 
     # batch sampler
     print(f"local rank {args.local_rank} / global rank {utils.get_rank()} successfully built train dataset.")
@@ -281,7 +281,7 @@ def main(args):
 
     # resume training
     if args.resume:
-        checkpoint = torch.load(args.resume, map_location='cpu')
+        checkpoint = torch.load(args.resume, map_location='cpu', weights_only=False)
         single_model.load_state_dict(checkpoint['model'])
         if args.model != 'lavt_one':
             single_bert_model.load_state_dict(checkpoint['bert_model'])
@@ -377,6 +377,7 @@ if __name__ == "__main__":
     from args import get_parser
     parser = get_parser()
     args = parser.parse_args()
+
 
     # ----------------------- 关键修复：必须在 init_distributed_mode 之前 -----------------------
     import os

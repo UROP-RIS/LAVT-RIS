@@ -216,7 +216,7 @@ class RelativeDataset(SynthesisDataset):
         noun_str = f"({idx_to_noun.get(node_id, 'obj')})" if idx_to_noun else f"[idx:{node_id}]"
         connector = "└── " if is_last else "├── "
         rel_str = f" --{relation}--> " if relation else ""
-        print(f"{prefix}{connector}{noun_str}{rel_str}")
+        # print(f"{prefix}{connector}{noun_str}{rel_str}")
         for i, child in enumerate(children):
             is_last_child = (i == len(children) - 1)
             extension = "    " if is_last else "│   "
@@ -431,7 +431,7 @@ class RelativeDataset(SynthesisDataset):
                     if dfs_traverse_children(node, obj):
                         return True
                     del placed_obj[obj_idx]
-                print(f"[Root] Failed to place root {obj['noun']} after {max_retry_root} retries.")
+                # print(f"[Root] Failed to place root {obj['noun']} after {max_retry_root} retries.")
                 return False
 
             relation = node['relation']
@@ -446,24 +446,24 @@ class RelativeDataset(SynthesisDataset):
                     if dfs_traverse_children(node, obj):
                         return True
                     del placed_obj[obj_idx]
-                    print(f"[Retry] Placed but children failed: {obj['noun']} at ({x}, {y}), attempt {retry + 1}")
-                else:
-                    print(f"[Retry] Failed to place {obj['noun']} with '{relation}' (attempt {retry + 1})")
+                    # print(f"[Retry] Placed but children failed: {obj['noun']} at ({x}, {y}), attempt {retry + 1}")
+                # else:
+                    # print(f"[Retry] Failed to place {obj['noun']} with '{relation}' (attempt {retry + 1})")
 
             if last_best:
                 x, y, max_iou = last_best
                 placed_obj[obj_idx] = {"cxcy": (x, y)}
-                print(f"[Fallback] Using best candidate for {obj['noun']} at ({x}, {y}) with IoU={max_iou:.3f}")
+                # print(f"[Fallback] Using best candidate for {obj['noun']} at ({x}, {y}) with IoU={max_iou:.3f}")
                 if dfs_traverse_children(node, obj):
                     return True
                 del placed_obj[obj_idx]
 
-            print(f"[Final Failure] Could not place {obj['noun']} after {max_retry_per_node} retries and fallback.")
+            # print(f"[Final Failure] Could not place {obj['noun']} after {max_retry_per_node} retries and fallback.")
             return False
 
         success = dfs_traverse(tree)
         if not success:
-            print("[Layout] Failed to generate valid layout.")
+            # print("[Layout] Failed to generate valid layout.")
             return False, {}, 512, 512
 
         for idx, pos in placed_obj.items():
@@ -645,8 +645,8 @@ class RelativeDataset(SynthesisDataset):
         ## Filter out the root
         chosen = random.choice(list(set(range(len(objects))) - set([trees["idx"]])))
 
-        referring_text = dataset.generate_referring_text(
-            dataset.get_path_to_node(trees, objects[chosen]['idx']), idx_to_noun
+        referring_text = self.generate_referring_text(
+            self.get_path_to_node(trees, objects[chosen]['idx']), idx_to_noun
         )
         status, placed_obj, width, height = self.optimize_layout(trees, objects)
         z_order = self.compute_z_order(trees, placed_obj)
@@ -656,8 +656,18 @@ class RelativeDataset(SynthesisDataset):
         
         padded_canvas = self.add_padding(canvas, target_aspect=1.0, pad_value=128)
         padded_mask = self.add_padding(final_mask, target_aspect=1.0, pad_value=0)
+        
+               # 最终处理
+        if not self.load_raw_data:
+            full_mask_img = Image.fromarray(padded_mask.astype(np.uint8)).convert("P")
+            img_pil = Image.fromarray(padded_canvas.astype(np.uint8)).convert("RGB")
+            img_tensor, mask_tensor = self.apply_transforms(img_pil, full_mask_img)
+            input_ids, attention_mask = self.tokenize_text(referring_text)
+            return img_tensor, mask_tensor, input_ids, attention_mask
+        else:
+            return padded_canvas, padded_mask, referring_text
 
-        return padded_canvas, padded_mask, referring_text
+
         
         
     

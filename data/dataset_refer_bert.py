@@ -132,6 +132,26 @@ def get_transform():
 
     return T.Compose(transforms)
 
+def get_dataset(image_set, dataset, refer_data_root = "./refer/data/", splitBy = "unc", bert_tokenizer = 'bert-base-uncased', eval_mode=False):
+    class Args:
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+    
+    args = Args(
+        refer_data_root=refer_data_root,
+        dataset=dataset,
+        splitBy=splitBy,
+        bert_tokenizer=bert_tokenizer,
+    )
+    ds = ReferDataset(args,
+                      split=image_set,
+                      image_transforms=get_transform(),
+                      target_transforms=None,
+                      eval_mode=eval_mode
+                      )
+    num_classes = 2
+    return ds, num_classes
+
 if __name__ == "__main__":
     # Example usage
     dataset = ReferDataset(args, split='train', eval_mode=False, image_transforms=get_transform())
