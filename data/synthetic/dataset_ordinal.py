@@ -21,47 +21,7 @@ class RowColumnOrdinalDataset(SynthesisDataset):
                 return data
         return data
     
-    def add_padding(self, img: np.ndarray, target_aspect: float, pad_value: int = 128) -> np.ndarray:
-        """
-        对图像添加 padding，保持宽高比，支持单通道和三通道图像
         
-        Args:
-            img: 输入图像 (H, W) 或 (H, W, 3), dtype=np.uint8
-            target_aspect: 目标宽高比 (width / height)
-            pad_value: 填充值（用于背景填充）
-        
-        Returns:
-            padded_img: (H_out, W_out, 3) 或 (H_out, W_out) 与输入通道一致
-        """
-        is_gray = (len(img.shape) == 2)
-        if is_gray:
-            h, w = img.shape
-            img_hwc = np.stack([img] * 3, axis=-1)  # 转为 (H, W, 3) 方便处理
-        else:
-            h, w = img.shape[:2]
-            img_hwc = img
-        current_aspect = w / h
-        if current_aspect < target_aspect:
-            new_w = int(h * target_aspect)
-            new_h = h
-            left = (new_w - w) // 2
-            right = new_w - w - left
-            top = bottom = 0
-        else:
-            new_h = int(w / target_aspect)
-            new_w = w
-            top = (new_h - h) // 2
-            bottom = new_h - h - top
-            left = right = 0
-        padded = np.full((new_h, new_w, 3), pad_value, dtype=img_hwc.dtype)
-        padded[top:top+h, left:left+w] = img_hwc
-        if is_gray:
-            padded = padded[:, :, 0]  # (H, W)
-
-        return padded
-        
-        
-    
     def __call__(self, idx=None) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         if idx is None:
             idx = np.random.randint(0, len(self.index))
@@ -331,7 +291,7 @@ class RowColumnOrdinalDataset(SynthesisDataset):
 
         weights = np.array(weights)
         weights = weights / weights.sum()  # 可选：用于调试
-        text = np.random.choice(templates, p=weights / weights.sum())
+        text = np.random.choice(templates ,p=weights / weights.sum())
         
         # Padding
         mean_value = np.mean(bg)

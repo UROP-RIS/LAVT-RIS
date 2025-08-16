@@ -59,26 +59,18 @@ small_offset = 5
 large_offset = 30
 RELATIONS = {
     "left": {
-        "dx": {"mode": "factor", "range": (-3.0, -1.0)},
-        "dy": {"mode": "abs", "range": (-overlap_tol, overlap_tol)},
         "templates": [
             "{A} on the left of {B}",
             "the {A} to the left of the {B}",
-            "{A} and {B}, with the {A} on the left"
         ]
     },
     "right": {
-        "dx": {"mode": "factor", "range": (1.0, 3.0)},
-        "dy": {"mode": "abs", "range": (-overlap_tol, overlap_tol)},
         "templates": [
             "{A} on the right of {B}",
             "the {A} beside the {B}, on its right",
-            "{A} and {B}, with the {A} on the right"
         ]
     },
     "above": {
-        "dy": {"mode": "factor", "range": (-3.0, -1.0)},
-        "dx": {"mode": "abs", "range": (-overlap_tol, overlap_tol)},
         "templates": [
             "{A} above the {B}",
             "the {A} positioned over the {B}",
@@ -99,8 +91,6 @@ RELATIONS = {
         ]
     },
     "below": {
-        "dy": {"mode": "factor", "range": (1.0, 3.0)},
-        "dx": {"mode": "abs", "range": (-overlap_tol, overlap_tol)},
         "templates": [
             "{A} below the {B}",
             "the {A} under the {B}",
@@ -124,9 +114,6 @@ RELATIONS = {
         ]
     },
     "behind": {
-        "dx": {"mode": "abs", "range": (-small_offset, small_offset)},
-        "dy": {"mode": "abs", "range": (small_offset, large_offset)},  # B slightly in front
-        "z_order": "B_over_A",  # B 贴在 A 上面（视觉遮挡）
         "templates": [
             "the {A} behind the {B}",
             "the {A} at the back of the {B}",
@@ -137,9 +124,6 @@ RELATIONS = {
         ]
     },
     "in_front_of": {
-        "dx": {"mode": "abs", "range": (-small_offset, small_offset)},
-        "dy": {"mode": "abs", "range": (-large_offset, -small_offset)},
-        "z_order": "A_over_B",
         "templates": [
             "the {A} in front of the {B}",
             "the {A} blocking the view of the {B}",
@@ -151,7 +135,6 @@ RELATIONS = {
         ]
     },
     "near": {
-    "distance": {"mode": "factor", "range": (1.0, 2.0)},  
     "templates": [
         "the {A} near the {B}",
         "the {A} close to the {B}",
@@ -326,7 +309,7 @@ class RelativeDataset(SynthesisDataset):
         min_gap = 10
         max_retry_per_node = 5
         max_retry_root = 5
-        iou_threshold = 0.1
+        iou_threshold = 0.4
 
         def get_bbox(cx, cy, w, h):
             return [cx - w/2, cy - h/2, cx + w/2, cy + h/2]
@@ -355,36 +338,37 @@ class RelativeDataset(SynthesisDataset):
                 cx, cy = None, None
                 if relation == "left":
                     right_edge_max = parent_cx - pw / 2 - min_gap
-                    left_edge_min = right_edge_max - 2 * max(pw, cw)
+                    left_edge_min = right_edge_max - 1.0 * max(pw, cw)
                     cx = random.uniform(left_edge_min + cw / 2, right_edge_max - cw / 2)
                     cy = random.uniform(parent_cy - ph * 0.3, parent_cy + ph * 0.3)
                 elif relation == "right":
                     left_edge_min = parent_cx + pw / 2 + min_gap
-                    right_edge_max = left_edge_min + 2 * max(pw, cw)
+                    right_edge_max = left_edge_min + 1.0 * max(pw, cw)
                     cx = random.uniform(left_edge_min + cw / 2, right_edge_max - cw / 2)
                     cy = random.uniform(parent_cy - ph * 0.3, parent_cy + ph * 0.3)
                 elif relation == "above":
                     bottom_edge_max = parent_cy - ph / 2 - min_gap
-                    top_edge_min = bottom_edge_max - 2 * max(ph, ch)
+                    top_edge_min = bottom_edge_max - 1.0 * max(ph, ch)
                     cy = random.uniform(top_edge_min + ch / 2, bottom_edge_max - ch / 2)
                     cx = random.uniform(parent_cx - pw * 0.3, parent_cx + pw * 0.3)
                 elif relation == "below":
                     top_edge_min = parent_cy + ph / 2 + min_gap
-                    bottom_edge_max = top_edge_min + 2 * max(ph, ch)
+                    bottom_edge_max = top_edge_min + 1.0 * max(ph, ch)
                     cy = random.uniform(top_edge_min + ch / 2, bottom_edge_max - ch / 2)
                     cx = random.uniform(parent_cx - pw * 0.3, parent_cx + pw * 0.3)
                 elif relation == "near":
-                    radius = 0.8 * math.sqrt(pw**2 + ph**2)
+                    radius_max = 0.5 * math.sqrt(pw**2 + ph**2)
+                    radius_min = 0.2 * radius_max
                     angle = random.uniform(0, 2 * math.pi)
-                    dist = random.uniform(min_gap, radius)
+                    dist = random.uniform(radius_min, radius_max)
                     cx = parent_cx + dist * math.cos(angle)
                     cy = parent_cy + dist * math.sin(angle)
                 elif relation == "in_front_of":
-                    offset = random.uniform(20, 100)
+                    offset = random.uniform(0, 30)
                     cx = parent_cx + random.uniform(-15, 15)
                     cy = parent_cy - offset
                 elif relation == "behind":
-                    offset = random.uniform(20, 100)
+                    offset = random.uniform(0, 30)
                     cx = parent_cx + random.uniform(-15, 15)
                     cy = parent_cy + offset
                 else:
@@ -494,7 +478,173 @@ class RelativeDataset(SynthesisDataset):
             pos["x2y2"] = (pos["x2y2"][0] - offset_x, pos["x2y2"][1] - offset_y)
 
         return True, placed_obj, canvas_width, canvas_height
-            
+    
+    def compute_z_order(self, tree, placed_obj):
+        """
+        根据空间关系和树结构确定每个实例的绘制顺序（z-order），避免遮挡错误。
+        返回：list of idx，按绘制顺序排列（先画的在前，后画的在后）
+
+        规则：
+        - "in_front_of": 前者在上层（后画）
+        - "behind": 前者在下层（先画）
+        - 默认：子节点在父节点之上（后画）
+        - 冲突时优先级：显式空间关系 > 树结构
+        """
+        # 初始化默认顺序：按 idx 排序（确定性）
+        nodes = list(placed_obj.keys())
+        z_order = []
+
+        # 显式空间关系优先级
+        below_relations = []  # (under, over) 表示 under 应该先画
+        explicit_pairs = set()
+
+        def extract_relations(node):
+            for child in node['children']:
+                rel = child['relation']
+                parent_idx = node['idx']
+                child_idx = child['idx']
+                pair = (min(parent_idx, child_idx), max(parent_idx, child_idx))
+
+                if rel == "in_front_of":
+                    # child 在 parent 前面 → child 后画（在上层）
+                    below_relations.append((parent_idx, child_idx))
+                    explicit_pairs.add(pair)
+                elif rel == "behind":
+                    # child 在 parent 后面 → child 先画（在下层）
+                    below_relations.append((child_idx, parent_idx))
+                    explicit_pairs.add(pair)
+                extract_relations(child)
+
+        extract_relations(tree)
+
+        # 构建依赖图
+        from collections import defaultdict, deque
+        graph = defaultdict(list)
+        indegree = {n: 0 for n in nodes}
+
+        for u, v in below_relations:
+            if u not in nodes or v not in nodes:
+                continue
+            graph[u].append(v)
+            indegree[v] = indegree.get(v, 0) + 1
+
+        # 添加默认父子顺序：parent 先画，child 后画
+        def add_parent_child_order(node):
+            for child in node['children']:
+                parent_idx = node['idx']
+                child_idx = child['idx']
+                pair = (min(parent_idx, child_idx), max(parent_idx, child_idx))
+                if pair not in explicit_pairs:  # 无显式关系才加默认
+                    if child_idx not in graph[parent_idx]:
+                        graph[parent_idx].append(child_idx)
+                        indegree[child_idx] = indegree.get(child_idx, 0) + 1
+                add_parent_child_order(child)
+        add_parent_child_order(tree)
+
+        # 拓扑排序（Kahn 算法）
+        queue = deque([n for n in nodes if indegree[n] == 0])
+        while queue:
+            u = queue.popleft()
+            z_order.append(u)
+            for v in graph[u]:
+                indegree[v] -= 1
+                if indegree[v] == 0:
+                    queue.append(v)
+
+        # 安全兜底
+        if len(z_order) != len(nodes):
+            missing = set(nodes) - set(z_order)
+            z_order.extend(missing)
+
+        return z_order
+
+    def paste_instance_by_order(self, canvas_width, canvas_height, placed_obj, z_order, refer_idx, objects):
+        """
+        按 z-order 将实例粘贴到画布上，并生成符合遮挡关系的 referring instance mask。
+        
+        Args:
+            canvas_width: 画布宽度
+            canvas_height: 画布高度
+            placed_obj: 布局字典，idx -> { "cxcy": (x, y) }
+            z_order: 绘制顺序（从底层到顶层）
+            refer_idx: 指代对象的 idx
+            objects: 对象列表，dict with 'img', 'mask', 'w', 'h', 'idx'
+
+        Returns:
+            canvas: 合成图像 (H, W, 3)
+            final_mask: referring instance 的可见部分 mask (H, W)
+        """
+        canvas = np.ones((canvas_height, canvas_width, 3), dtype=np.uint8) * 128  # 灰色背景
+        final_mask = np.zeros((canvas_height, canvas_width), dtype=np.uint8)  # 指代对象的初始 mask
+        idx_to_obj = {obj['idx']: obj for obj in objects}  # 快速查找
+
+        # 第一遍：按 z-order 贴图，并记录 refer_idx 的 mask
+        for idx in z_order:
+            obj = idx_to_obj[idx]
+            pos = placed_obj[idx]
+            cx, cy = pos["cxcy"]
+            x = int(cx - obj['w'] // 2)
+            y = int(cy - obj['h'] // 2)
+
+            # 贴图
+            canvas, _ = self.paste(canvas, obj['img'], obj['mask'], x, y)
+
+            # 记录 refer_idx 的完整 mask（未考虑遮挡）
+            if idx == refer_idx:
+                _, temp_mask = self.paste(np.zeros_like(canvas), obj['img'], obj['mask'], x, y)
+                final_mask = temp_mask.copy()
+
+        # 第二步：生成遮挡 mask（所有在 refer_idx 之后绘制的对象）
+        occluder_mask = np.zeros((canvas_height, canvas_width), dtype=np.uint8)
+        past_refer = False
+
+        for idx in z_order:
+            if idx == refer_idx:
+                past_refer = True
+                continue
+            if past_refer:  # 这些对象在 refer_idx 之上，会遮挡它
+                obj = idx_to_obj[idx]
+                pos = placed_obj[idx]
+                cx, cy = pos["cxcy"]
+                x = int(cx - obj['w'] // 2)
+                y = int(cy - obj['h'] // 2)
+                _, temp_mask = self.paste(np.zeros_like(canvas), obj['img'], obj['mask'], x, y)
+                occluder_mask = np.maximum(occluder_mask, temp_mask)
+
+        # 最终 mask：refer_idx 可见部分 = 原始 mask - 被上层遮挡区域
+        final_mask = np.where(occluder_mask > 0, 0, final_mask).astype(np.uint8)
+
+        return canvas, final_mask
+    
+    def __call__(self, idx=None):
+        """
+        生成一个合成图像和对应的 referring expression。
+        """
+        if idx is None:
+            idx = np.random.randint(0, len(self.index))
+        
+        objects = self.load_objects(6)
+        trees = self.build_tree_bfs(objects)
+        idx_to_noun = {obj['idx']: obj['noun'] for obj in objects}
+        chosen = random.choice(range(len(objects)))
+
+        referring_text = dataset.generate_referring_text(
+            dataset.get_path_to_node(trees, objects[chosen]['idx']), idx_to_noun
+        )
+        status, placed_obj, width, height = self.optimize_layout(trees, objects)
+        z_order = self.compute_z_order(trees, placed_obj)
+        canvas, final_mask = self.paste_instance_by_order(
+            width, height, placed_obj, z_order, objects[chosen]['idx'], objects
+        )
+        
+        padded_canvas = self.add_padding(canvas, target_aspect=1.0, pad_value=128)
+        padded_mask = self.add_padding(final_mask, target_aspect=1.0, pad_value=0)
+
+        return padded_canvas, padded_mask, referring_text
+        
+        
+    
+
             
 if __name__ == "__main__":
     dataset = RelativeDataset(
@@ -506,29 +656,16 @@ if __name__ == "__main__":
         load_raw_data=True
     )
     
-    # Example usage: 10 samples
-    for i in range(10): 
-        data = dataset.load_objects(6)
-        trees = dataset.build_tree_bfs(data)
-        idx_to_noun = {obj['idx']: obj['noun'] for obj in data}
-        dataset.print_tree_structure(trees, idx_to_noun = {k: (k, v) for k, v in idx_to_noun.items()})
-        referring_text = dataset.generate_referring_text(
-            dataset.get_path_to_node(trees, data[1]['idx']), idx_to_noun
+    for i in range(50):
+        canvas, mask, text = dataset()
+        print(f"Generated text: {text}")
+        print(f"Canvas shape: {canvas.shape}, Mask shape: {mask.shape}")
+        vis_img = dataset.get_vis_img(
+            canvas, mask, text
         )
-        print(f"Referring expression: {referring_text}")
-        status, placed_obj, width, height = dataset.optimize_layout(trees, data)
-        print(f"Canvas size: {width} x {height}")
-        visualize_layout(
-                placed_obj=placed_obj,
-                objects=data,
-                tree=trees,
-                idx_to_noun=idx_to_noun,
-                canvas_width=width,
-                canvas_height=height,
-                output_path=f"visualizations/synthetics/layout_{i}.png"
-            )
-        print(placed_obj)
-        print()
-        print("-" * 50)
+        print(vis_img.shape)
+        cv2.imwrite(f"visualizations/synthetics/relative_{i}.png", vis_img)
+        
+   
         
         

@@ -9,6 +9,7 @@ from pycocotools import mask as pycocotools_mask
 import torch
 from abc import abstractmethod
 import transforms as T
+import cv2
 
 class SynthesisDataset:
     
@@ -119,6 +120,45 @@ class SynthesisDataset:
         # img: np.array; txt: str; mask: np.array; noun: str
         return {"img": img, "txt": txt, "mask": mask, "noun": noun}
     
+    def add_padding(self, img: np.ndarray, target_aspect: float, pad_value: int = 128) -> np.ndarray:
+        """
+        对图像添加 padding，保持宽高比，支持单通道和三通道图像
+        
+        Args:
+            img: 输入图像 (H, W) 或 (H, W, 3), dtype=np.uint8
+            target_aspect: 目标宽高比 (width / height)
+            pad_value: 填充值（用于背景填充）
+        
+        Returns:
+            padded_img: (H_out, W_out, 3) 或 (H_out, W_out) 与输入通道一致
+        """
+        is_gray = (len(img.shape) == 2)
+        if is_gray:
+            h, w = img.shape
+            img_hwc = np.stack([img] * 3, axis=-1)  # 转为 (H, W, 3) 方便处理
+        else:
+            h, w = img.shape[:2]
+            img_hwc = img
+        current_aspect = w / h
+        if current_aspect < target_aspect:
+            new_w = int(h * target_aspect)
+            new_h = h
+            left = (new_w - w) // 2
+            right = new_w - w - left
+            top = bottom = 0
+        else:
+            new_h = int(w / target_aspect)
+            new_w = w
+            top = (new_h - h) // 2
+            bottom = new_h - h - top
+            left = right = 0
+        padded = np.full((new_h, new_w, 3), pad_value, dtype=img_hwc.dtype)
+        padded[top:top+h, left:left+w] = img_hwc
+        if is_gray:
+            padded = padded[:, :, 0]  # (H, W)
+
+        return padded
+    
     def paste(self, bg: np.ndarray, patch: np.ndarray, patch_mask: np.ndarray, x: int, y: int) -> tuple[np.ndarray, np.ndarray]:
         h, w = patch.shape[:2]
         bg_h, bg_w = bg.shape[:2]
@@ -141,6 +181,29 @@ class SynthesisDataset:
         patch_cropped = patch[y1:y2+1, x1:x2+1]
         mask_cropped = mask[y1:y2+1, x1:x2+1]
         return mask_cropped, patch_cropped
+
+    def get_vis_img(self, img, mask, referring_text):
+        vis_img = img.copy()
+        if vis_img.max() <= 1.0:
+            vis_img = (vis_img * 255).astype(np.uint8)
+        vis_img = cv2.cvtColor(vis_img, cv2.COLOR_RGB2BGR)
+
+        # Create colored mask for target instance (green)
+        target_mask = (mask > 0).astype(np.uint8) * 255
+        target_mask_colored = np.zeros_like(vis_img)
+        target_mask_colored[:, :, 1] = target_mask  # Green channel
+
+        # Overlay
+        overlay = cv2.addWeighted(vis_img, 0.6, target_mask_colored, 0.4, 0)
+
+        # Add text
+        # cv2.putText(overlay, referring_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6 * vis_img.shape[1] / 640, (255, 255, 255), 2)
+        font_scale = max(0.4, min(1.5, (vis_img.shape[1] / 640) * (25 / len(referring_text))))
+        thickness = int(font_scale * 2)
+        text_size = cv2.getTextSize(referring_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)[0] 
+        x = min(10, vis_img.shape[1] - text_size[0] - 10)
+        cv2.putText(overlay, referring_text, (x, 30), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), max(1, thickness), lineType=cv2.LINE_AA)
+        return overlay
         
     
     def tokenize_text(self, text: str) -> tuple[torch.Tensor, torch.Tensor]: 
