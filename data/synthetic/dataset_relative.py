@@ -1,11 +1,57 @@
 from data.synthetic.dataset_synthetic import SynthesisDataset
 from data.synthetic.utils.spacy import has_spatial_expression 
-from PIL import Image
+from data.synthetic.utils.misc import compute_iou_xywh, compute_iou_xyxy
+from PIL import Image, ImageDraw, ImageFont
 from collections import deque
 import numpy as np
+import math
 import cv2
 import torch
 import random
+
+def visualize_layout(placed_obj, objects, tree, idx_to_noun, canvas_width, canvas_height, output_path="layout_visualization.png", bg_color=(230, 230, 230)):
+    canvas = np.ones((canvas_height, canvas_width, 3), dtype=np.uint8)
+    canvas[:] = bg_color
+    # 使用高对比度颜色
+    colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255), (0, 255, 255)]
+    idx_to_color = {obj['idx']: colors[i % len(colors)] for i, obj in enumerate(objects)}
+
+    centers = {}
+
+    for obj in objects:
+        idx = obj['idx']
+        if idx not in placed_obj:
+            continue
+
+        pos = placed_obj[idx]
+        x1, y1 = pos["x1y1"]
+        x2, y2 = pos["x2y2"]
+        x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+
+        x1 = np.clip(x1, 0, canvas_width - 1)
+        y1 = np.clip(y1, 0, canvas_height - 1)
+        x2 = np.clip(x2, 0, canvas_width - 1)
+        y2 = np.clip(y2, 0, canvas_height - 1)
+
+        if x1 >= x2 or y1 >= y2:
+            continue
+
+        color = idx_to_color[idx]
+        
+        cv2.rectangle(canvas, (x1, y1), (x2, y2), color, thickness=2)
+        centers[idx] = ((x1 + x2) // 2, (y1 + y2) // 2)
+        noun = idx_to_noun.get(idx, 'obj')
+        cv2.putText(canvas, f"{idx}:{noun}", (x1, max(0, y1 - 20)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+
+    def dfs_draw_edges(node):
+        for child in node['children']:
+            dfs_draw_edges(child)
+
+    dfs_draw_edges(tree)
+
+    cv2.imwrite(output_path, canvas)
+    print(f"Saved to {output_path}")
+    return canvas
 
 min_gap = 10
 overlap_tol = 20
@@ -13,8 +59,8 @@ small_offset = 5
 large_offset = 30
 RELATIONS = {
     "left": {
-        "dx": (-float('inf'), -min_gap),  # A.x + A.w < B.x - min_gap
-        "dy": (-overlap_tol, overlap_tol), # 垂直方向大致对齐
+        "dx": {"mode": "factor", "range": (-3.0, -1.0)},
+        "dy": {"mode": "abs", "range": (-overlap_tol, overlap_tol)},
         "templates": [
             "{A} on the left of {B}",
             "the {A} to the left of the {B}",
@@ -22,8 +68,8 @@ RELATIONS = {
         ]
     },
     "right": {
-        "dx": (min_gap, float('inf')),
-        "dy": (-overlap_tol, overlap_tol),
+        "dx": {"mode": "factor", "range": (1.0, 3.0)},
+        "dy": {"mode": "abs", "range": (-overlap_tol, overlap_tol)},
         "templates": [
             "{A} on the right of {B}",
             "the {A} beside the {B}, on its right",
@@ -31,8 +77,8 @@ RELATIONS = {
         ]
     },
     "above": {
-        "dy": (-float('inf'), -min_gap),
-        "dx": (-overlap_tol, overlap_tol),
+        "dy": {"mode": "factor", "range": (-3.0, -1.0)},
+        "dx": {"mode": "abs", "range": (-overlap_tol, overlap_tol)},
         "templates": [
             "{A} above the {B}",
             "the {A} positioned over the {B}",
@@ -53,8 +99,8 @@ RELATIONS = {
         ]
     },
     "below": {
-        "dy": (min_gap, float('inf')),
-        "dx": (-overlap_tol, overlap_tol),
+        "dy": {"mode": "factor", "range": (1.0, 3.0)},
+        "dx": {"mode": "abs", "range": (-overlap_tol, overlap_tol)},
         "templates": [
             "{A} below the {B}",
             "the {A} under the {B}",
@@ -78,8 +124,8 @@ RELATIONS = {
         ]
     },
     "behind": {
-        "dx": (-small_offset, small_offset),
-        "dy": (small_offset, large_offset),  # B slightly in front
+        "dx": {"mode": "abs", "range": (-small_offset, small_offset)},
+        "dy": {"mode": "abs", "range": (small_offset, large_offset)},  # B slightly in front
         "z_order": "B_over_A",  # B 贴在 A 上面（视觉遮挡）
         "templates": [
             "the {A} behind the {B}",
@@ -91,8 +137,8 @@ RELATIONS = {
         ]
     },
     "in_front_of": {
-        "dx": (-small_offset, small_offset),
-        "dy": (-large_offset, -small_offset),
+        "dx": {"mode": "abs", "range": (-small_offset, small_offset)},
+        "dy": {"mode": "abs", "range": (-large_offset, -small_offset)},
         "z_order": "A_over_B",
         "templates": [
             "the {A} in front of the {B}",
@@ -105,7 +151,7 @@ RELATIONS = {
         ]
     },
     "near": {
-    "distance": (0, 80),     
+    "distance": {"mode": "factor", "range": (1.0, 2.0)},  
     "templates": [
         "the {A} near the {B}",
         "the {A} close to the {B}",
@@ -147,6 +193,8 @@ class RelativeDataset(SynthesisDataset):
                     "noun": raw["noun"],
                     "mask": crop_mask,
                     "img": crop_img,
+                    "w": crop_mask.shape[1],
+                    "h": crop_mask.shape[0],
                 }
             )
         return objects
@@ -270,6 +318,184 @@ class RelativeDataset(SynthesisDataset):
         
         return noun
 
+
+    def optimize_layout(self, tree, objects):
+        placed_obj = {}
+        idx_to_obj = {obj['idx']: obj for obj in objects}
+
+        min_gap = 10
+        max_retry_per_node = 5
+        max_retry_root = 5
+        iou_threshold = 0.1
+
+        def get_bbox(cx, cy, w, h):
+            return [cx - w/2, cy - h/2, cx + w/2, cy + h/2]
+
+        def compute_iou(box1, box2):
+            return compute_iou_xywh(
+                [(box1[0] + box1[2]) / 2, (box1[1] + box1[3]) / 2, box1[2] - box1[0], box1[3] - box1[1]],
+                [(box2[0] + box2[2]) / 2, (box2[1] + box2[3]) / 2, box2[2] - box2[0], box2[3] - box2[1]]
+            )
+
+        def sample_by_relation_strict(parent_obj, child_obj, relation):
+            p_idx = parent_obj['idx']
+            if p_idx not in placed_obj:
+                return None, None, float('inf')
+            px, py = placed_obj[p_idx]["cxcy"]
+            pw, ph = parent_obj['w'], parent_obj['h']
+            cw, ch = child_obj['w'], child_obj['h']
+            parent_cx = px + pw / 2
+            parent_cy = py + ph / 2
+
+            best_max_iou = float('inf')
+            best_pos = (parent_cx + 100, parent_cy + 100)
+            attempts = 500
+
+            for _ in range(attempts):
+                cx, cy = None, None
+                if relation == "left":
+                    right_edge_max = parent_cx - pw / 2 - min_gap
+                    left_edge_min = right_edge_max - 2 * max(pw, cw)
+                    cx = random.uniform(left_edge_min + cw / 2, right_edge_max - cw / 2)
+                    cy = random.uniform(parent_cy - ph * 0.3, parent_cy + ph * 0.3)
+                elif relation == "right":
+                    left_edge_min = parent_cx + pw / 2 + min_gap
+                    right_edge_max = left_edge_min + 2 * max(pw, cw)
+                    cx = random.uniform(left_edge_min + cw / 2, right_edge_max - cw / 2)
+                    cy = random.uniform(parent_cy - ph * 0.3, parent_cy + ph * 0.3)
+                elif relation == "above":
+                    bottom_edge_max = parent_cy - ph / 2 - min_gap
+                    top_edge_min = bottom_edge_max - 2 * max(ph, ch)
+                    cy = random.uniform(top_edge_min + ch / 2, bottom_edge_max - ch / 2)
+                    cx = random.uniform(parent_cx - pw * 0.3, parent_cx + pw * 0.3)
+                elif relation == "below":
+                    top_edge_min = parent_cy + ph / 2 + min_gap
+                    bottom_edge_max = top_edge_min + 2 * max(ph, ch)
+                    cy = random.uniform(top_edge_min + ch / 2, bottom_edge_max - ch / 2)
+                    cx = random.uniform(parent_cx - pw * 0.3, parent_cx + pw * 0.3)
+                elif relation == "near":
+                    radius = 0.8 * math.sqrt(pw**2 + ph**2)
+                    angle = random.uniform(0, 2 * math.pi)
+                    dist = random.uniform(min_gap, radius)
+                    cx = parent_cx + dist * math.cos(angle)
+                    cy = parent_cy + dist * math.sin(angle)
+                elif relation == "in_front_of":
+                    offset = random.uniform(20, 100)
+                    cx = parent_cx + random.uniform(-15, 15)
+                    cy = parent_cy - offset
+                elif relation == "behind":
+                    offset = random.uniform(20, 100)
+                    cx = parent_cx + random.uniform(-15, 15)
+                    cy = parent_cy + offset
+                else:
+                    span = 2 * max(pw, ph)
+                    cx = random.uniform(parent_cx - span, parent_cx + span)
+                    cy = random.uniform(parent_cy - span, parent_cy + span)
+
+                cx, cy = int(cx), int(cy)
+                new_box = get_bbox(cx, cy, cw, ch)
+
+                max_iou = 0.0
+                valid = True
+                for idx, pos in placed_obj.items():
+                    if idx == child_obj['idx'] or idx == p_idx:
+                        continue
+                    ox, oy = pos["cxcy"]
+                    other_w, other_h = objects[idx]['w'], objects[idx]['h']
+                    other_box = [ox - other_w/2, oy - other_h/2, ox + other_w/2, oy + other_h/2]
+                    iou = compute_iou(new_box, other_box)
+                    if iou > iou_threshold:
+                        valid = False
+                    if iou > max_iou:
+                        max_iou = iou
+
+                if max_iou < best_max_iou:
+                    best_max_iou = max_iou
+                    best_pos = (cx, cy)
+
+            best_x, best_y = best_pos
+            return best_x, best_y, best_max_iou
+
+        def dfs_traverse_children(node, current_obj):
+            for child_node in node['children']:
+                if not dfs_traverse(child_node, current_obj):
+                    return False
+            return True
+
+        def dfs_traverse(node, parent_obj=None):
+            obj_idx = node['idx']
+            obj = idx_to_obj[obj_idx]
+
+            if parent_obj is None:
+                for _ in range(max_retry_root):
+                    cx = random.randint(-200, 200)
+                    cy = random.randint(-200, 200)
+                    placed_obj[obj_idx] = {"cxcy": (cx, cy)}
+                    if dfs_traverse_children(node, obj):
+                        return True
+                    del placed_obj[obj_idx]
+                print(f"[Root] Failed to place root {obj['noun']} after {max_retry_root} retries.")
+                return False
+
+            relation = node['relation']
+            last_best = None
+
+            for retry in range(max_retry_per_node):
+                x, y, max_iou = sample_by_relation_strict(parent_obj, obj, relation)
+                last_best = (x, y, max_iou)
+
+                if x is not None and max_iou <= iou_threshold:
+                    placed_obj[obj_idx] = {"cxcy": (x, y)}
+                    if dfs_traverse_children(node, obj):
+                        return True
+                    del placed_obj[obj_idx]
+                    print(f"[Retry] Placed but children failed: {obj['noun']} at ({x}, {y}), attempt {retry + 1}")
+                else:
+                    print(f"[Retry] Failed to place {obj['noun']} with '{relation}' (attempt {retry + 1})")
+
+            if last_best:
+                x, y, max_iou = last_best
+                placed_obj[obj_idx] = {"cxcy": (x, y)}
+                print(f"[Fallback] Using best candidate for {obj['noun']} at ({x}, {y}) with IoU={max_iou:.3f}")
+                if dfs_traverse_children(node, obj):
+                    return True
+                del placed_obj[obj_idx]
+
+            print(f"[Final Failure] Could not place {obj['noun']} after {max_retry_per_node} retries and fallback.")
+            return False
+
+        success = dfs_traverse(tree)
+        if not success:
+            print("[Layout] Failed to generate valid layout.")
+            return False, {}, 512, 512
+
+        for idx, pos in placed_obj.items():
+            cx, cy = pos["cxcy"]
+            w, h = objects[idx]["w"], objects[idx]["h"]
+            pos["x1y1"] = (cx - w / 2, cy - h / 2)
+            pos["x2y2"] = (cx + w / 2, cy + h / 2)
+
+        all_x = [pos["x1y1"][0] for pos in placed_obj.values()] + [pos["x2y2"][0] for pos in placed_obj.values()]
+        all_y = [pos["x1y1"][1] for pos in placed_obj.values()] + [pos["x2y2"][1] for pos in placed_obj.values()]
+        min_x, max_x = min(all_x), max(all_x)
+        min_y, max_y = min(all_y), max(all_y)
+
+        margin_w = random.randint(80, 200)
+        margin_h = random.randint(80, 200)
+        canvas_width = int(max_x - min_x + margin_w)
+        canvas_height = int(max_y - min_y + margin_h)
+        offset_x = min_x - margin_w // 2
+        offset_y = min_y - margin_h // 2
+
+        for idx, pos in placed_obj.items():
+            cx, cy = pos["cxcy"]
+            pos["cxcy"] = (cx - offset_x, cy - offset_y)
+            pos["x1y1"] = (pos["x1y1"][0] - offset_x, pos["x1y1"][1] - offset_y)
+            pos["x2y2"] = (pos["x2y2"][0] - offset_x, pos["x2y2"][1] - offset_y)
+
+        return True, placed_obj, canvas_width, canvas_height
+            
+            
 if __name__ == "__main__":
     dataset = RelativeDataset(
         prob=0.5, 
@@ -285,9 +511,24 @@ if __name__ == "__main__":
         data = dataset.load_objects(6)
         trees = dataset.build_tree_bfs(data)
         idx_to_noun = {obj['idx']: obj['noun'] for obj in data}
-        dataset.print_tree_structure(trees, idx_to_noun)
+        dataset.print_tree_structure(trees, idx_to_noun = {k: (k, v) for k, v in idx_to_noun.items()})
         referring_text = dataset.generate_referring_text(
             dataset.get_path_to_node(trees, data[1]['idx']), idx_to_noun
         )
         print(f"Referring expression: {referring_text}")
+        status, placed_obj, width, height = dataset.optimize_layout(trees, data)
+        print(f"Canvas size: {width} x {height}")
+        visualize_layout(
+                placed_obj=placed_obj,
+                objects=data,
+                tree=trees,
+                idx_to_noun=idx_to_noun,
+                canvas_width=width,
+                canvas_height=height,
+                output_path=f"visualizations/synthetics/layout_{i}.png"
+            )
+        print(placed_obj)
+        print()
+        print("-" * 50)
+        
         
