@@ -9,7 +9,7 @@
                         "module": "data.synthetic.dataset_synthetic",
                         "class_name": "SynthesisDatasetWrapper",
                         "args": {
-                            "length": 20000,
+                            "length": 10000,
                             "load_raw_data": false,
                             "datasets": [
                                 {
@@ -59,37 +59,12 @@
                                 }
                             ]
                         }
-                    },
-                    {
-                        "module": "data.dataset_pseudo",
-                        "class_name": "get_dataset",
-                        "args":{
-                            "root": "/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
-                            "augment_text_root": "augmentation/data",
-                            "dataset": "unc+",
-                            "split": "train",
-                            "max_tokens": 20
-                        }
                     }
                 ]
             }
-        },
-        "loss":{
-            "label_loss":{
-                "module": "loss",
-                "class_name": "LabelCriterion",
-                "args": {
-                    "weights": [0.9, 1.1]
-                }
-            },
-            "consistent_loss":{
-                "module": "loss",
-                "class_name": "ConsistentDiceLoss",
-                "args": {
-                    "smooth": 1.0
-                }
-            }
         }
+
+
     },
     "val": {
         "dataset": {

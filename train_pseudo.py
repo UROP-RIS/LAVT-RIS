@@ -119,8 +119,8 @@ def unfreeze_model(model):
         param.requires_grad = True
 
 
-def train_one_epoch(model, criterion, optimizer, data_loader, lr_scheduler, epoch, print_freq,
-                    iterations, bert_model, lambda_consistency=1.0):
+def train_one_epoch(model, label_criterion, consistent_criterion, alpha, optimizer, data_loader, lr_scheduler, epoch, print_freq,
+                    iterations, bert_model):
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
     scaler = GradScaler()
@@ -128,11 +128,7 @@ def train_one_epoch(model, criterion, optimizer, data_loader, lr_scheduler, epoc
     metric_logger.add_meter('label_loss', utils.SmoothedValue(window_size=20, fmt='{value:.4f}'))
     metric_logger.add_meter('consistent_loss', utils.SmoothedValue(window_size=20, fmt='{value:.4f}'))
     header = 'Epoch: [{}]'.format(epoch)
-    consistent_loss_fn = ConsistentDiceLoss(smooth=1.0)
-    # consistent_loss_fn = ConsistentKLLoss(temperature=1.5)
     
-    # warmup for the first few epochs
-
     for data in metric_logger.log_every(data_loader, print_freq, header):
         # image, target, sentences, attentions, aug_sentences, aug_attentions = data
         image = data['img']
@@ -179,9 +175,9 @@ def train_one_epoch(model, criterion, optimizer, data_loader, lr_scheduler, epoc
                 model.train()
                 output_student = model(aug_image, aug_sentences, l_mask=aug_attentions)
                 
-            label_loss = criterion(output_teacher, target)
+            label_loss = label_criterion(output_teacher, target) * alpha
             output_student_ref = output_student.clone().detach()
-            consistency_loss = consistent_loss_fn(output_student_ref, output_teacher , scale_factor=lambda_consistency)
+            consistency_loss = consistent_criterion(output_student_ref, output_teacher, scaler = 1.0 - alpha)
             total_loss = label_loss + consistency_loss
 
         optimizer.zero_grad()
@@ -189,9 +185,7 @@ def train_one_epoch(model, criterion, optimizer, data_loader, lr_scheduler, epoc
         scaler.step(optimizer)
         scaler.update()
 
-        # 更新学习率（确认 scheduler 类型）
         lr_scheduler.step()
-
         metric_logger.update(
             loss=total_loss.item(),
             label_loss=label_loss.item(),
@@ -200,42 +194,15 @@ def train_one_epoch(model, criterion, optimizer, data_loader, lr_scheduler, epoc
         )
 
     print(f"Epoch {epoch}: Avg Label Loss: {metric_logger.meters['label_loss'].global_avg:.4f}, "
-          f"Avg Consistency Loss: {metric_logger.meters['consistent_loss'].global_avg:.4f}, "
-          f"Lambda consistency: {lambda_consistency}")
-
+          f"Avg Consistency Loss: {metric_logger.meters['consistent_loss'].global_avg:.4f}, ")
     return metric_logger.meters['loss'].global_avg, iterations
 
 def main(args):
-    # # dataset, num_classes = get_dataset("train",
-    # #                                    get_transform(args=args),
-    # #                                    args=args)
-    # if len(args.pseudo_dataset) > 1:
-    #     datasets = []
-    #     for dataset_name in args.pseudo_dataset:
-    #         datasets.append(
-    #             pseudo.get_dataset(
-    #                 root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
-    #                 augment_text_root="augmentation/data",
-    #                 dataset=dataset_name,
-    #                 split="train",
-    #                 max_tokens=20
-    #             )
-    #         )
-    #     dataset = ConcatDataset(datasets)
-    # else:
-    #     dataset = pseudo.get_dataset(
-    #         root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
-    #         augment_text_root="augmentation/data",
-    #         dataset=args.pseudo_dataset[0],
-    #         split="train",
-    #         max_tokens=20
-    #     )
     dataset_test, _ = get_dataset("val",
                                   get_transform(args=args),
                                   args=args)
     configs = json.load(open(args.configs, 'r'))
     dataset = make_object_from_config(configs["train"]["dataset"])
-    # dataset_test = make_object_from_config(configs["val"]["dataset"])
 
     # batch sampler
     print(f"local rank {args.local_rank} / global rank {utils.get_rank()} successfully built train dataset.")
@@ -257,6 +224,8 @@ def main(args):
         sampler=train_sampler, num_workers=args.workers, pin_memory=args.pin_mem, drop_last=True, persistent_workers=True)
     data_loader_test = torch.utils.data.DataLoader(
         dataset_test, batch_size=1, sampler=test_sampler, num_workers=args.workers)
+    print("Data loader length: {}".format(len(data_loader)))
+    
 
     # model initialization
     # ========== 原始模型初始化 ==========
@@ -336,17 +305,20 @@ def main(args):
     # resume training (optimizer, lr scheduler, and the epoch)
     if args.resume:
         optimizer.load_state_dict(checkpoint['optimizer'])
-        lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
+        # lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
         resume_epoch = checkpoint['epoch']
+        # resume_epoch = -999
     else:
         resume_epoch = -999
 
     # training loops
-    label_criterion = LabelCriterion(weight=torch.FloatTensor([0.9, 1.1]).cuda())
-    # label_criterion = LabelDiceLoss(smooth=1.0)
+    label_criterion = make_object_from_config(configs["train"]["loss"]["label_loss"])
+    consistent_criterion = make_object_from_config(configs["train"]["loss"]["consistent_loss"])
+    alpha = configs["train"]["loss"]["alpha"]
+    
     for epoch in range(max(0, resume_epoch+1), args.epochs):
         data_loader.sampler.set_epoch(epoch)
-        train_one_epoch(model, label_criterion, optimizer, data_loader, lr_scheduler, epoch, args.print_freq,
+        train_one_epoch(model, label_criterion, consistent_criterion, alpha, optimizer, data_loader, lr_scheduler, epoch, args.print_freq,
                         iterations, bert_model)
         iou, overallIoU = evaluate(model, data_loader_test, bert_model)
         print('Average object IoU {}'.format(iou))

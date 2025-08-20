@@ -3,7 +3,7 @@ python test_with_candidates.py \
     --swin_type base \
     --dataset Gref \
     --split val  \
-    --resume ./checkpoints/model_best_gref_google.pth \
+    --resume ./checkpoints/gref_corrections.pth \
     --workers 4 \
     --ddp_trained_weights \
     --window12 \

@@ -665,7 +665,7 @@ class RelativeDataset(SynthesisDataset):
             input_ids, attention_mask = self.tokenize_text(referring_text)
             return img_tensor, mask_tensor, input_ids, attention_mask
         else:
-            return padded_canvas, padded_mask, referring_text
+            return padded_canvas, referring_text, padded_mask
 
 
         

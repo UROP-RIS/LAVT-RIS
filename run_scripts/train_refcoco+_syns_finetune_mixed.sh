@@ -18,9 +18,12 @@ torchrun \
     --workers 12 \
     --wd 1e-2 \
     --swin_type base \
+    --configs "configs/main.json" \
+    --resume "./checkpoints/refcoco+_pseudo_consistent.pth" \
     --pretrained_swin_weights ./pretrained_weights/swin_base_patch4_window12_384_22k.pth \
-    --epochs 40 \
+    --epochs 30 \
     --img_size 480 \
     --pin_mem true \
     --ck_bert ./bert/models \
-    2>&1 | tee ./models/refcoco+/output
+    --output_dir "./checkpoints/ft_no_consistent"
+    2>&1 | tee ./models/refcoco/output

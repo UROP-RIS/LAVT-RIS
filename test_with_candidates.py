@@ -275,6 +275,7 @@ def main(args):
     single_model = segmentation.__dict__[args.model](pretrained='', args=args)
     checkpoint = torch.load(args.resume, map_location='cpu', weights_only=False)
     single_model.load_state_dict(checkpoint['model'])
+    print("Epoch: ", checkpoint['epoch'])
     model = single_model.to(device)
 
     if args.model != 'lavt_one':

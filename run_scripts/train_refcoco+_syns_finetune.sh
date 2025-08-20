@@ -7,7 +7,7 @@ np=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n' | wc -l)
 
 torchrun \
     --nproc_per_node=$np \
-    --master_port=12345 \
+    --master_port=12346 \
     train_pseudo.py \
     --model lavt \
     --dataset refcoco+ \
@@ -18,11 +18,12 @@ torchrun \
     --workers 12 \
     --wd 1e-2 \
     --swin_type base \
+    --configs "configs/main_pure.json" \
     --resume "./checkpoints/refcoco+_pseudo_consistent.pth" \
-    --configs "configs/main.json" \
     --pretrained_swin_weights ./pretrained_weights/swin_base_patch4_window12_384_22k.pth \
     --epochs 30 \
     --img_size 480 \
     --pin_mem true \
     --ck_bert ./bert/models \
-    2>&1 | tee ./models/refcoco+/output
+    --output_dir "./checkpoints/ft_ralative_only_no_consistent"
+    2>&1 | tee ./models/refcoco/output

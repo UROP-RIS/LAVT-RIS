@@ -5,7 +5,7 @@ from torch.nn import functional as F
 class LabelCriterion(nn.Module):
     def __init__(self, weight):
         super().__init__()
-        self.register_buffer('weight', weight)
+        self.register_buffer('weight', torch.FloatTensor(weight).cuda(()))
 
     def forward(self, input, target):
         return F.cross_entropy(input, target, weight=self.weight)
