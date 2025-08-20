@@ -1,0 +1,50 @@
+{
+    "train":{
+        "dataset": {
+            "module": "torch.utils.data",
+            "class_name": "ConcatDataset",
+            "args": {
+                "datasets":[
+                    {
+                        "module": "data.dataset_multi_text",
+                        "class_name": "MultiTextDataset",
+                        "args":{
+                            "root": "/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
+                            "cls_result_root": "/data/datasets/tzhangbu/Cherry-Pick/local_trial",
+                            "dataset": "unc",
+                            "split": "train",
+                            "max_tokens": 20
+                        }
+                    }
+                ]
+            }
+        },
+        "loss":{
+            "label_loss":{
+                "module": "loss",
+                "class_name": "LabelCriterion",
+                "args": {
+                    "weight": [0.9, 1.1]
+                }
+            },
+            "consistent_loss":{
+                "module": "loss",
+                "class_name": "ConsistentDiceLoss",
+                "args": {
+                    "smooth": 1.0
+                }
+            },
+            "alpha": 0.5
+        }
+    },
+    "val": {
+        "dataset": {
+            "module": "data.dataset_refer_bert",
+            "class_name": "get_dataset",
+            "args": {
+                "image_set": "val", 
+                "dataset": "refcoco"
+            }
+        }
+    }
+}
