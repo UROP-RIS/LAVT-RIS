@@ -1,7 +1,7 @@
 #!/bin/bash
 mkdir -p ./models/refcoco
 
-gpu="4"
+gpu="0,1,2,3"
 export CUDA_VISIBLE_DEVICES=$gpu
 np=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n' | wc -l)
 
@@ -13,12 +13,13 @@ torchrun \
     --dataset refcoco \
     --model_id refcoco \
     --pseudo_dataset unc \
-    --batch-size 1 \
+    --batch-size 12 \
     --lr 0.00005 \
     --workers 12 \
     --wd 1e-2 \
     --swin_type base \
     --pretrained_swin_weights ./pretrained_weights/swin_base_patch4_window12_384_22k.pth \
+    --configs "configs/main.json" \
     --epochs 30 \
     --img_size 480 \
     --pin_mem true \

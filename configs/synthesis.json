@@ -5,11 +5,11 @@
             "class_name": "ConcatDataset",
             "args": {
                 "datasets":[
-                    {
+                   {
                         "module": "data.synthetic.dataset_synthetic",
                         "class_name": "SynthesisDatasetWrapper",
                         "args": {
-                            "length": 10000,
+                            "length": 20000,
                             "load_raw_data": false,
                             "datasets": [
                                 {

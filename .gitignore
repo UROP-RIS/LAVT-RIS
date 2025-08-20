@@ -16,3 +16,4 @@ __pycache__
 /augmentation/data
 *.jpg
 /visualizations
+/output

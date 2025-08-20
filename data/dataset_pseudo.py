@@ -18,6 +18,7 @@ class PseudoLabelDataset(data.Dataset):
                  dataset: str = "unc", 
                  split = "train", 
                  max_tokens=20,
+                 max_iters = None,
                  eval_mode=False):
         self.root = root
         self.dataset = dataset
@@ -37,6 +38,8 @@ class PseudoLabelDataset(data.Dataset):
     
         # Read and sort JSON files by number at the end of filename
         json_files = [f for f in os.listdir(self.index_root) if f.endswith('.json')]
+        if max_iters is not None:
+            json_files = json_files[:max_iters]
 
         json_files_sorted = sorted(json_files, key=self.extract_number)
         self.index_list = [os.path.join(self.index_root, f) for f in json_files_sorted]
@@ -45,8 +48,6 @@ class PseudoLabelDataset(data.Dataset):
         self.image_transforms = image_transforms
         self.eval_mode = eval_mode
             
-        print(self.index_list[:10], "first 10 pseudo label files")
-        print(len(self.index_list), "pseudo label files found")
     
     def __len__(self):
         return len(self.index_list)
@@ -199,7 +200,7 @@ class PseudoLabelDataset(data.Dataset):
         return batch
 
 
-def get_dataset(root: str, augment_text_root: str, dataset: str, split: str, image_transforms=None, max_tokens=20, eval_mode=False):
+def get_dataset(root: str, augment_text_root: str, dataset: str, split: str, image_transforms=None, max_tokens=20, eval_mode=False, max_iters=None):
     """
     Get the PseudoLabelDataset.
     
@@ -221,7 +222,7 @@ def get_dataset(root: str, augment_text_root: str, dataset: str, split: str, ima
                       ]
         image_transforms = T.Compose(transforms)
 
-    return PseudoLabelDataset(image_transforms, root, augment_text_root, dataset, split, max_tokens, eval_mode=eval_mode)
+    return PseudoLabelDataset(image_transforms, root, augment_text_root, dataset, split, max_tokens, eval_mode=eval_mode, max_iters=max_iters)
 
 if __name__ == "__main__":
     dataset = get_dataset(

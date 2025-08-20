@@ -1,6 +1,5 @@
 import datetime
 from torch.cuda.amp import autocast, GradScaler
-from torch.utils.data import ConcatDataset
 import os
 import time
 import torch
@@ -12,11 +11,10 @@ from lib import segmentation
 import transforms as T
 import utils
 import numpy as np
-# import data.dataset_pseudo as pseudo
-import data.dataset_multi as pseudo
-from loss import LabelCriterion, ConsistentDiceLoss, ConsistentKLLoss, LabelDiceLoss
 import json
 from misc.common import make_object_from_config
+from misc.workspace import create_workspace, save_configs_and_args
+from torch.utils.tensorboard import SummaryWriter
 
 
 # ----------------------- 重要修改开始 -----------------------
@@ -57,7 +55,7 @@ def get_transform(args):
     return T.Compose(transforms)
 
 
-def evaluate(model, data_loader, bert_model):
+def evaluate(model, data_loader, bert_model, writer=None, epoch=None):
     model.eval()
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Test:'
@@ -103,12 +101,21 @@ def evaluate(model, data_loader, bert_model):
     print('Mean IoU is %.2f\n' % (mIoU * 100.))
     results_str = ''
     for n_eval_iou in range(len(eval_seg_iou_list)):
+        precision = seg_correct[n_eval_iou] * 100. / seg_total
         results_str += '    precision@%s = %.2f\n' % \
-                       (str(eval_seg_iou_list[n_eval_iou]), seg_correct[n_eval_iou] * 100. / seg_total)
+                       (str(eval_seg_iou_list[n_eval_iou]), precision)
+        if writer is not None and epoch is not None:
+            writer.add_scalar(f"val/precision@{eval_seg_iou_list[n_eval_iou]}", precision, epoch)
+            
     results_str += '    overall IoU = %.2f\n' % (cum_I * 100. / cum_U)
     print(results_str)
-    return 100 * mIoU, 100 * cum_I / cum_U
-    # return 100 * iou, 100 * mIoU
+    
+    mIoU, oIoU = 100 * mIoU, 100 * cum_I / cum_U
+    
+    if writer is not None and epoch is not None:
+        writer.add_scalar("val/mean_IoU", mIoU, epoch)
+        writer.add_scalar("val/overall_IoU", oIoU, epoch)
+    return mIoU, oIoU
     
 def freeze_model(model):
     for param in model.parameters():
@@ -120,7 +127,7 @@ def unfreeze_model(model):
 
 
 def train_one_epoch(model, label_criterion, consistent_criterion, alpha, optimizer, data_loader, lr_scheduler, epoch, print_freq,
-                    iterations, bert_model):
+                    iterations, bert_model, writer=None):
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
     scaler = GradScaler()
@@ -129,7 +136,7 @@ def train_one_epoch(model, label_criterion, consistent_criterion, alpha, optimiz
     metric_logger.add_meter('consistent_loss', utils.SmoothedValue(window_size=20, fmt='{value:.4f}'))
     header = 'Epoch: [{}]'.format(epoch)
     
-    for data in metric_logger.log_every(data_loader, print_freq, header):
+    for i, data in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
         # image, target, sentences, attentions, aug_sentences, aug_attentions = data
         image = data['img']
         target = data['target']
@@ -177,7 +184,7 @@ def train_one_epoch(model, label_criterion, consistent_criterion, alpha, optimiz
                 
             label_loss = label_criterion(output_teacher, target) * alpha
             output_student_ref = output_student.clone().detach()
-            consistency_loss = consistent_criterion(output_student_ref, output_teacher, scaler = 1.0 - alpha)
+            consistency_loss = consistent_criterion(output_student_ref, output_teacher, scale_factor = 1.0 - alpha)
             total_loss = label_loss + consistency_loss
 
         optimizer.zero_grad()
@@ -192,18 +199,39 @@ def train_one_epoch(model, label_criterion, consistent_criterion, alpha, optimiz
             consistent_loss=consistency_loss.item(),
             lr=optimizer.param_groups[0]["lr"]
         )
+        
+        if writer is not None:
+            global_step = epoch * len(data_loader) + i
+            writer.add_scalar("train/total_loss", total_loss.item(), global_step)
+            writer.add_scalar("train/label_loss", label_loss.item(), global_step)
+            writer.add_scalar("train/consistent_loss", consistency_loss.item(), global_step)
+            writer.add_scalar("train/lr", optimizer.param_groups[0]["lr"], global_step)
 
     print(f"Epoch {epoch}: Avg Label Loss: {metric_logger.meters['label_loss'].global_avg:.4f}, "
           f"Avg Consistency Loss: {metric_logger.meters['consistent_loss'].global_avg:.4f}, ")
+    
+    if writer is not None:
+        writer.add_scalar("train/epoch_avg_label_loss", metric_logger.meters['label_loss'].global_avg, epoch)
+        writer.add_scalar("train/epoch_avg_consistent_loss", metric_logger.meters['consistent_loss'].global_avg, epoch)
+        writer.add_scalar("train/epoch_avg_loss", metric_logger.meters['loss'].global_avg, epoch)
     return metric_logger.meters['loss'].global_avg, iterations
 
 def main(args):
+    workspace_dir, checkpoints_dir, logs_dir, configs_dir = create_workspace(args)
+    print(f"Workspace created at: {workspace_dir}")
+    save_configs_and_args(args, configs_dir, args.configs)
+    
+    writer = SummaryWriter(logs_dir)
+    print(f"TensorBoard logs will be saved to: {logs_dir}")
+    
     dataset_test, _ = get_dataset("val",
                                   get_transform(args=args),
                                   args=args)
     configs = json.load(open(args.configs, 'r'))
     dataset = make_object_from_config(configs["train"]["dataset"])
-
+    label_criterion = make_object_from_config(configs["train"]["loss"]["label_loss"])
+    consistent_criterion = make_object_from_config(configs["train"]["loss"]["consistent_loss"])
+    alpha = configs["train"]["loss"]["alpha"]
     # batch sampler
     print(f"local rank {args.local_rank} / global rank {utils.get_rank()} successfully built train dataset.")
     num_tasks = utils.get_world_size()
@@ -299,28 +327,28 @@ def main(args):
     # housekeeping
     start_time = time.time()
     iterations = 0
-    # best_oIoU = -0.1
     best_mIoU = -0.1
 
     # resume training (optimizer, lr scheduler, and the epoch)
     if args.resume:
         optimizer.load_state_dict(checkpoint['optimizer'])
-        # lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
+        lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
         resume_epoch = checkpoint['epoch']
         # resume_epoch = -999
     else:
         resume_epoch = -999
 
     # training loops
-    label_criterion = make_object_from_config(configs["train"]["loss"]["label_loss"])
-    consistent_criterion = make_object_from_config(configs["train"]["loss"]["consistent_loss"])
-    alpha = configs["train"]["loss"]["alpha"]
     
     for epoch in range(max(0, resume_epoch+1), args.epochs):
         data_loader.sampler.set_epoch(epoch)
+        
+        ## Train
         train_one_epoch(model, label_criterion, consistent_criterion, alpha, optimizer, data_loader, lr_scheduler, epoch, args.print_freq,
-                        iterations, bert_model)
-        iou, overallIoU = evaluate(model, data_loader_test, bert_model)
+                        iterations, bert_model, writer if utils.get_rank() == 0 else None)
+        
+        ## Evaluate
+        iou, overallIoU = evaluate(model, data_loader_test, bert_model, writer if utils.get_rank() == 0 else None, epoch)
         print('Average object IoU {}'.format(iou))
         print('Overall IoU {}'.format(overallIoU))
         save_checkpoint = (best_mIoU < iou)
@@ -330,19 +358,43 @@ def main(args):
                 dict_to_save = {'model': single_model.state_dict(), 'bert_model': single_bert_model.state_dict(),
                                 'optimizer': optimizer.state_dict(), 'epoch': epoch, 'args': args,
                                 'lr_scheduler': lr_scheduler.state_dict()}
-            else:
+            else: 
                 dict_to_save = {'model': single_model.state_dict(),
                                 'optimizer': optimizer.state_dict(), 'epoch': epoch, 'args': args,
                                 'lr_scheduler': lr_scheduler.state_dict()}
-            utils.save_on_master(dict_to_save, os.path.join(args.output_dir,
-                                                            'model_best_{}.pth'.format(args.model_id)))
-            # best_oIoU = overallIoU
+
+            best_model_path = os.path.join(checkpoints_dir, 'model_best_{}.pth'.format(args.model_id))
+            utils.save_on_master(dict_to_save, best_model_path)
             best_mIoU = iou
+            
+            if utils.get_rank() == 0:
+                writer.add_scalar("best/mIoU", best_mIoU, epoch)
+        
+        ## Save the last checkpoint
+        if single_bert_model is not None:
+            dict_to_save = {'model': single_model.state_dict(), 'bert_model': single_bert_model.state_dict(),
+                            'optimizer': optimizer.state_dict(), 'epoch': epoch, 'args': args,
+                            'lr_scheduler': lr_scheduler.state_dict()}
+        else:
+            dict_to_save = {'model': single_model.state_dict(),
+                            'optimizer': optimizer.state_dict(), 'epoch': epoch, 'args': args,
+                            'lr_scheduler': lr_scheduler.state_dict()}
+        checkpoint_path = os.path.join(checkpoints_dir, 'model_last_{}.pth'.format(args.model_id))
+        utils.save_on_master(dict_to_save, checkpoint_path)
 
     # summarize
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     print('Training time {}'.format(total_time_str))
+    
+    if utils.get_rank() == 0:
+        writer.add_text('summary/training_time', total_time_str)
+        writer.add_scalar("summary/best_mIoU", best_mIoU, epoch)
+        writer.close()
+    
+    print(f"Training completed. Best mIoU: {best_mIoU:.2f}")
+    print(f"Best model saved at: {os.path.join(checkpoints_dir, 'model_best_{}.pth'.format(args.model_id))}")
+    print(f"TensorBoard logs saved at: {logs_dir}")
 
     
 if __name__ == "__main__":

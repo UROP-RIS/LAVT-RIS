@@ -6,69 +6,15 @@
             "args": {
                 "datasets":[
                     {
-                        "module": "data.synthetic.dataset_synthetic",
-                        "class_name": "SynthesisDatasetWrapper",
-                        "args": {
-                            "length": 20000,
-                            "load_raw_data": false,
-                            "datasets": [
-                                {
-                                    "module": "data.synthetic.dataset_ocr",
-                                    "class_name": "NumberOcrDataset",
-                                    "args": {
-                                        "prob": 0.0, 
-                                        "root": "/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
-                                        "dataset": "unc",
-                                        "split": "train",
-                                        "name": "Number OCR"
-                                    }
-                                },
-                                {
-                                    "module": "data.synthetic.dataset_ordinal",
-                                    "class_name": "RowColumnOrdinalDataset",
-                                    "args": {
-                                        "prob": 0.0,
-                                        "root": "/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
-                                        "dataset": "unc",
-                                        "split": "train",
-                                        "range_num": [2, 4],
-                                        "name": "Row Column Ordinal"
-                                    }
-                                },
-                                {
-                                    "module": "data.synthetic.dataset_relative",
-                                    "class_name": "RelativeDataset",
-                                    "args": {
-                                        "prob": 1.0,
-                                        "root": "/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
-                                        "dataset": "unc",
-                                        "split": "train",
-                                        "name": "Relative Dataset"
-                                    }
-                                },
-                                {
-                                    "module": "data.synthetic.dataset_polar",
-                                    "class_name": "PolarOrdinalDataset",
-                                    "args": {
-                                        "prob": 0.0,
-                                        "root": "/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
-                                        "dataset": "unc",
-                                        "split": "train",
-                                        "name": "Polar Ordinal Dataset"
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    {
                         "module": "data.dataset_pseudo",
                         "class_name": "get_dataset",
                         "args":{
                             "root": "/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
                             "augment_text_root": "augmentation/data",
-                            "dataset": "unc+",
+                            "dataset": "unc",
                             "split": "train",
-                            "max_tokens": 20
+                            "max_tokens": 20,
+                            "max_iters": 500
                         }
                     }
                 ]
@@ -79,7 +25,7 @@
                 "module": "loss",
                 "class_name": "LabelCriterion",
                 "args": {
-                    "weights": [0.9, 1.1]
+                    "weight": [0.9, 1.1]
                 }
             },
             "consistent_loss":{
@@ -88,7 +34,8 @@
                 "args": {
                     "smooth": 1.0
                 }
-            }
+            },
+            "alpha": 0.5
         }
     },
     "val": {
