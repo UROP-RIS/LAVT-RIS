@@ -2,13 +2,52 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+# class LabelCriterion(nn.Module):
+#     def __init__(self, weight):
+#         super().__init__()
+#         self.register_buffer('weight', torch.FloatTensor(weight).cuda())
+
+#     def forward(self, input, target):
+#         return F.cross_entropy(input, target, weight=self.weight)
+
+
 class LabelCriterion(nn.Module):
-    def __init__(self, weight):
+    def __init__(self, weight=None):
         super().__init__()
-        self.register_buffer('weight', torch.FloatTensor(weight).cuda())
+        if weight is not None:
+            # weight: [C], 例如 [0.5, 1.0] 表示类别 0 权重 0.5，类别 1 权重 1.0
+            self.register_buffer('weight', torch.FloatTensor(weight).cuda())
+        else:
+            self.weight = None
 
     def forward(self, input, target):
-        return F.cross_entropy(input, target, weight=self.weight)
+        """
+        input: (N, C, H, W) 或 (N, C)   -> logits
+        target: (N, H, W) 或 (N,)       -> soft labels in [0.0, 1.0], float type
+               对于二分类，target 是每个位置为 1 的概率
+        """
+        assert input.shape[1] == 2, "This is for binary classification: 2 channels (0: bg, 1: fg)"
+
+        # 将 input 转为 log-probabilities using log_softmax
+        log_prob = F.log_softmax(input, dim=1)  # (N, 2, H, W)
+
+        # target: (N, H, W) -> expand to (N, 2, H, W)
+        # 假设 target 是前景（类别 1）的概率
+        # 那么类别 0 的概率就是 1 - target
+        target_fg = target.unsqueeze(1)          # (N, 1, H, W)
+        target_bg = 1.0 - target.unsqueeze(1)    # (N, 1, H, W)
+        soft_target = torch.cat([target_bg, target_fg], dim=1)  # (N, 2, H, W)
+
+        # 计算逐元素损失: -sum(target * log_prob)
+        loss = -soft_target * log_prob  # (N, 2, H, W)
+
+        # 加权（如果提供了类别权重）
+        if self.weight is not None:
+            class_weight = self.weight.view(1, 2, 1, 1)  # (1, 2, 1, 1)
+            loss = loss * class_weight
+
+        # 平均损失
+        return loss.sum(dim=1).mean()  # 先对类别求和，再对 spatial 和 batch 求均值
 
 class LabelDiceLoss(nn.Module):
     def __init__(self, smooth=1.0, reduction='mean'):

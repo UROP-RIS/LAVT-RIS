@@ -2,11 +2,11 @@ python test_with_candidates.py \
     --model lavt \
     --swin_type base \
     --dataset unc \
-    --split testB  \
-    --resume ./checkpoints/refcoco_correction.pth \
+    --split val  \
+    --resume output/refcoco_20250821_234057/checkpoints/model_best_refcoco.pth \
     --workers 4 \
     --ddp_trained_weights \
     --window12 \
     --img_size 480 \
     --ck_bert ./bert/models \
-    --device cuda:2
+    --device cuda:5

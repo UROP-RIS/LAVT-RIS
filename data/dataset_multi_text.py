@@ -2,6 +2,7 @@ import numpy as np
 import os
 import json
 from data.common import AbstractDataset
+import torch
 
 
 class MultiTextDataset(AbstractDataset):
@@ -12,7 +13,8 @@ class MultiTextDataset(AbstractDataset):
                  split = "train", 
                  max_tokens=20,
                  max_iters = None,
-                 image_transforms=None):
+                 image_transforms=None,
+                 mode="normal"):
         
         super().__init__(
             root=root, 
@@ -38,6 +40,7 @@ class MultiTextDataset(AbstractDataset):
         
         if max_iters is not None:
             self.target_items = self.target_items[:max_iters]
+        self.mode = mode
         
         print("==" * 20)
         print(f"Loading dataset from {self.index_root}")
@@ -46,26 +49,52 @@ class MultiTextDataset(AbstractDataset):
         print(f"Classification results path: {self.cls_results_path}")
         print("Find {} images and {} targets".format(len(self.img_items), len(self.target_items)))
         print("single target count: ", single_count)
+        print(f"Dataset mode: {mode}")
         print("==" * 20)
+
         
             
     def __len__(self):
         return len(self.target_items)
+    
+    def _normalize_to_softmax(self, data: list):
+        tensor_data = torch.tensor([x if x is not None else float('nan') for x in data])
+        mask = ~torch.isnan(tensor_data)
+        valid = tensor_data[mask]
+        valid_softmax = torch.softmax(valid, dim=0)
+        result = torch.zeros_like(tensor_data)
+        result.masked_scatter_(mask, valid_softmax)
+        return result
 
     def __getitem__(self, idx):
         
         target_item = self.target_items[idx]
         ## Currently, randomly select a referring text result
-        selected_index = np.random.choice(target_item)
+        if self.mode == "normal" or self.mode == "weighted":
+            selected_index = np.random.choice(target_item)
+        elif self.mode == "best":
+            best_scores = []
+            for item in target_item:
+                index_path = os.path.join(self.index_root, f"{self.dataset}_{self.split}_{item}.json")
+                raw_img, raw_target_array, txt, similarity_score, predicted_mask_id = self.load_from_index(index_path)
+                softmax_score = self._normalize_to_softmax(similarity_score)
+                best_score = softmax_score[predicted_mask_id].item()
+                best_scores.append(best_score)
+            
+            # print(best_scores)
+            selected_index = target_item[np.argmax(best_scores)]
+            # print(f"selected index: {np.argmax(best_scores)}({selected_index})", )
+        
         ## Select another text from the same target groups, 
         others = [i for i in target_item if i != selected_index]
-        aug_index = np.random.choice(others)
-        
+        if len(others) == 0:
+            # If no other texts are available, use the same text for augmentation
+            aug_index = selected_index
+        else:
+            aug_index = np.random.choice(others)
         index_path = os.path.join(self.index_root, f"{self.dataset}_{self.split}_{selected_index}.json")
         aug_index_path = os.path.join(self.index_root, f"{self.dataset}_{self.split}_{aug_index}.json")
-        
-        raw_img, raw_target_array, txt = self.load_from_index(index_path)
-        
+        raw_img, raw_target_array, txt, similarity_score, predicted_mask_id = self.load_from_index(index_path)
         ## Augment text
         aug_index_data = json.load(open(aug_index_path, 'r'))
         aug_img_txt_gt_name = aug_index_data["img_txt_gt_file_name"]
@@ -73,12 +102,13 @@ class MultiTextDataset(AbstractDataset):
         aug_img_txt_gt = np.load(aug_img_txt_gt_path, allow_pickle=True)
         aug_data_dict = {key: aug_img_txt_gt[key] for key in aug_img_txt_gt}
         aug_txt = aug_data_dict['sent_batch'][0]
-        # if aug_txt == txt:
-        #     print(f"Warning: Augmented text is the same as original text for index {idx}. Using original text.")
-        #     print(f"Aug index: {aug_index}")
-        #     print(f"index: {selected_index}")
 
         img, target = self.apply_transform(raw_img.copy(), raw_target_array.copy())
+        
+        if self.mode == "weighted":
+            normalized_score = self._normalize_to_softmax(similarity_score)
+            predicted_target_score, _ = torch.max(normalized_score, dim=0)
+            target = target * predicted_target_score
         padded_input_ids, attention_mask = self.tokenize_text(txt)
         try:
             aug_padded_input_ids, aug_attention_mask = self.tokenize_text(aug_txt)
@@ -101,8 +131,8 @@ class MultiTextDataset(AbstractDataset):
         return batch
 
 if __name__ == "__main__":
-    dataset = MultiTextDataset()
-    sample_counts = 1000
+    dataset = MultiTextDataset(mode="best")
+    sample_counts = 10
     duplicate_text_counts = 0
     choices = np.random.choice(len(dataset), 1000, replace=False)
     for idx in choices:

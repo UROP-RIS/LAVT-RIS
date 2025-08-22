@@ -56,6 +56,7 @@ class AbstractDataset(torch.utils.data.Dataset):
         img_tx_gt_name = index_data["img_txt_gt_file_name"]
         mask_file_name = index_data["mask_file_name"]
         predicted_mask_id = index_data["predicted_mask_id"]
+        similarity_score = index_data["similarity_score"]
         
         img_txt_gt_path = os.path.join(self.image_txt_gt_root, img_tx_gt_name)
         img_txt_gt = np.load(img_txt_gt_path, allow_pickle=True)
@@ -67,7 +68,7 @@ class AbstractDataset(torch.utils.data.Dataset):
         mask_candidates = json.load(open(mask_path, 'r'))["annotation"]
         rle_mask = mask_candidates[predicted_mask_id]["rle"]
         mask_array = pycocotools_mask.decode(rle_mask)
-        return img, mask_array, txt
+        return img, mask_array, txt, similarity_score, predicted_mask_id
     
     def apply_transform(self, img: np.ndarray, target: np.ndarray):
         target = Image.fromarray(target.astype(np.uint8)).convert("P") 
