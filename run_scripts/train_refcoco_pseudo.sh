@@ -19,8 +19,8 @@ torchrun \
     --wd 1e-2 \
     --swin_type base \
     --pretrained_swin_weights ./pretrained_weights/swin_base_patch4_window12_384_22k.pth \
-    --configs "configs/multitext_best_unc.json" \
-    --epochs 50 \
+    --configs "configs/multitext_baseline_unc_small_smooth.json" \
+    --epochs 60 \
     --img_size 480 \
     --pin_mem true \
     --ck_bert ./bert/models \

@@ -13,7 +13,8 @@
                             "cls_result_root": "/data/datasets/tzhangbu/Cherry-Pick/local_trial",
                             "dataset": "unc",
                             "split": "train",
-                            "max_tokens": 20
+                            "max_tokens": 20,
+                            "mode": "normal"
                         }
                     }
                 ]
