@@ -1,0 +1,19 @@
+{
+    "dataset": {
+        "module": "data.dataset_pseudo",
+        "class_name": "get_dataset",
+        "args":{
+            "root": "/localdata/tzhangbu/dataset/refcoco",
+            "augment_text_root": "augmentation/data",
+            "dataset": "unc",
+            "split": "val",
+            "max_tokens": 20,
+            "eval_mode": true
+        }
+    },
+    "stream_configs": {
+        "vis_freq": 100,
+        "enable_visualization": true,
+        "save_new_label": true
+    }
+}

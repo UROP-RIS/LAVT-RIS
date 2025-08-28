@@ -58,58 +58,105 @@ class PseudoLabelDataset(data.Dataset):
         img_tx_gt_name = index_data["img_txt_gt_file_name"]
         mask_file_name = index_data["mask_file_name"]
         predicted_mask_id = index_data["predicted_mask_id"]
-        
+
+        # Load image-text-ground truth
         img_txt_gt_path = os.path.join(self.image_txt_gt_root, img_tx_gt_name)
         img_txt_gt = np.load(img_txt_gt_path, allow_pickle=True)
         data_dict = {key: img_txt_gt[key] for key in img_txt_gt}
-        img = data_dict['im_batch']
+        raw_img = data_dict['im_batch']  # H x W x 3
         txt = data_dict['sent_batch'][0]
-        
-        ## Augment text
+
+        orig_h, orig_w = raw_img.shape[:2]
+
+        # Load mask candidates
+        mask_path = os.path.join(self.mask_root, mask_file_name)
+        mask_candidates = json.load(open(mask_path, 'r'))["annotation"]
+        rle_mask = mask_candidates[predicted_mask_id]["rle"]
+        raw_mask = pycocotools_mask.decode(rle_mask)  # H x W, binary
+
+        # Convert to PIL for transforms
+        img = Image.fromarray(raw_img.astype(np.uint8)).convert("RGB")
+        mask = Image.fromarray(raw_mask.astype(np.uint8)).convert("P")
+
+        # Apply transforms
+        transformed_img, transformed_mask = self.image_transforms(img, mask)
+
+        # Tokenize original and augmented text
+        padded_input_ids, attention_mask = self.tokenize_text(txt)
+
+        # Augmented text
         data_id = self.extract_number(os.path.basename(index_path))
         augment_text_path = os.path.join(self.augment_text_root, f"{self.dataset}_{self.split}_augtext_{data_id}.json")
         if os.path.exists(augment_text_path):
             aug_data = json.load(open(augment_text_path, 'r'))
             aug_text_keys = list(aug_data.keys())[1:]
-            if aug_text_keys is None or len(aug_text_keys) == 0:
-                aug_txt = txt  # Fallback to original text if no augmented texts are available
-            else:
-                ## Random select one of the augmented texts
-                selected = np.random.choice(list(aug_text_keys))
+            if aug_text_keys and len(aug_text_keys) > 0:
+                selected = np.random.choice(aug_text_keys)
                 aug_txt = aug_data[selected]
+            else:
+                aug_txt = txt
         else:
             aug_txt = txt
-        
-        if aug_txt == txt:
-            print(f"Warning: Augmented text is the same as original text for index {idx}. Using original text.")
-        
-        mask_path = os.path.join(self.mask_root, mask_file_name)
-        mask_candidates = json.load(open(mask_path, 'r'))["annotation"]
-        rle_mask = mask_candidates[predicted_mask_id]["rle"]
-        mask = pycocotools_mask.decode(rle_mask)
-        mask = Image.fromarray(mask.astype(np.uint8)).convert("P")
-        img = Image.fromarray(img.astype(np.uint8)).convert("RGB")
-        img, target = self.image_transforms(img, mask)
-        
-        padded_input_ids, attention_mask = self.tokenize_text(txt)
+
+        # if aug_txt == txt:
+        #     print(f"Warning: Augmented text is the same as original text for index {idx}. Using original text.")
+
         try:
             aug_padded_input_ids, aug_attention_mask = self.tokenize_text(aug_txt)
         except Exception as e:
             print(f"Error tokenizing augmented text: {e}")
             aug_padded_input_ids, aug_attention_mask = self.tokenize_text(txt)
-        # return img, target, padded_input_ids, attention_mask, aug_padded_input_ids, aug_attention_mask
+
+        # Build base batch
         batch = {
-            "img": img,
-            "target": target,
+            "img": transformed_img,
+            "target": transformed_mask,
             "txt": padded_input_ids,
             "attention_mask": attention_mask,
             "aug_txt": aug_padded_input_ids,
             "aug_attention_mask": aug_attention_mask,
         }
-        
-        return batch
-        
 
+        # Only in eval_mode: include raw data and extra info
+        if self.eval_mode:
+            # Convert raw mask to binary array for all candidates
+            all_masks = []
+            for candidate in mask_candidates:
+                m = pycocotools_mask.decode(candidate["rle"])
+                all_masks.append(m)  # each is H x W binary
+
+            # GT mask
+            gt_mask = data_dict["mask_batch"]  # assuming this is the ground truth
+
+            batch.update({
+                "raw_img": raw_img,           # original image array (H, W, 3)
+                "raw_mask": raw_mask,         # predicted mask before transform (H, W)
+                "all_masks": all_masks,       # list of all candidate masks (H, W)
+                "gt": gt_mask,                # ground truth mask
+                "orig_size": (orig_h, orig_w),# original size (H, W)
+                "txt_raw": txt,               # original text string
+                "aug_txt_raw": aug_txt,       # augmented text string
+            })
+
+        return batch
+
+    @staticmethod
+    def eval_collate_fn(batch):
+        """
+        Custom collate function for evaluation mode.
+        - Stacks tensors that can be batched (img, target, txt, etc.)
+        - Keeps raw data (raw_img, raw_mask, gt, etc.) as lists to avoid shape mismatch.
+        """
+        elem = batch[0]
+        collated = {}
+        keys = elem.keys()
+        for key in keys:
+            items = [d[key] for d in batch]
+            if key in ['raw_img', 'raw_mask', 'gt', 'all_masks', 'txt_raw', 'aug_txt_raw', 'orig_size']:
+                collated[key] = items
+            else:
+                collated[key] = torch.stack(items, dim=0)
+        return collated
     
     def extract_number(self, filename):
         match = re.search(r'_(\d+)\.json$', filename)
@@ -134,70 +181,6 @@ class PseudoLabelDataset(data.Dataset):
         
         return torch.tensor(padded_ids).unsqueeze(0), torch.tensor(attention_mask).unsqueeze(0)
     
-    def get_raw_item(self, idx):
-        """
-        Get the raw item of the text, img, and mask and augmented text from the dataset.
-        """
-        if idx < 0 or idx >= len(self.index_list):
-            raise IndexError("Index out of range.")
-        index_path = self.index_list[idx]
-        index_data = json.load(open(index_path, 'r'))
-        img_tx_gt_name = index_data["img_txt_gt_file_name"]
-        mask_file_name = index_data["mask_file_name"]
-        predicted_mask_id = index_data["predicted_mask_id"]
-        img_txt_gt_path = os.path.join(self.image_txt_gt_root, img_tx_gt_name)
-        img_txt_gt = np.load(img_txt_gt_path, allow_pickle=True)
-        data_dict = {key: img_txt_gt[key] for key in img_txt_gt}
-        img = data_dict['im_batch']
-        raw_img = img.copy()
-        orig_h, orig_w = img.shape[:2]
-        img = Image.fromarray(img.astype(np.uint8)).convert("RGB")
-        txt = data_dict['sent_batch'][0]
-        
-        mask_path = os.path.join(self.mask_root, mask_file_name)
-        mask_candidates = json.load(open(mask_path, 'r'))["annotation"]
-        rle_mask = mask_candidates[predicted_mask_id]["rle"]
-        mask = pycocotools_mask.decode(rle_mask)
-        mask = Image.fromarray(mask.astype(np.uint8)).convert("P")
-        img, mask = self.image_transforms(img, mask)
-        
-        ## Augment text
-        data_id = self.extract_number(os.path.basename(index_path))
-        augment_text_path = os.path.join(self.augment_text_root, f"{self.dataset}_{self.split}_augtext_{data_id}.json")
-        if os.path.exists(augment_text_path):
-            aug_data = json.load(open(augment_text_path, 'r'))
-            aug_text_keys = list(aug_data.keys())[1:]
-            if aug_text_keys is None or len(aug_text_keys) == 0:
-                aug_txt = txt  # Fallback to original text if no augmented texts are available
-            else:
-                ## Random select one of the augmented texts
-                selected = np.random.choice(list(aug_text_keys))
-                aug_txt = aug_data[selected]
-        else:
-            aug_txt = txt   
-        
-        batch = {
-            "img": img,
-            "txt": txt,
-            "aug_txt": aug_txt,
-            "mask": mask,
-            "orig_size": (orig_h, orig_w),  # 保留原始尺寸
-            "raw_img": raw_img,  # 保留原始图像
-        }
-        
-        # Return all candidates if specified
-        all_masks = []
-        for i, candidate in enumerate(mask_candidates):
-            rle_mask = candidate["rle"]
-            mask = pycocotools_mask.decode(rle_mask)
-            all_masks.append(mask)
-        batch["all_masks"] = all_masks
-        
-        # gt
-        gt = data_dict["mask_batch"]
-        batch["gt"] = gt
-        
-        return batch
 
 
 def get_dataset(root: str, augment_text_root: str, dataset: str, split: str, image_transforms=None, max_tokens=20, eval_mode=False, max_iters=None):

@@ -1,59 +1,37 @@
-import time
 
 import torch
 import torch.utils.data
-from torch import nn
-
 from bert.modeling_bert import BertModel
-import torchvision
-
 from lib import segmentation
 import transforms as T
 import utils
-
 import numpy as np
-from PIL import Image
 import torch.nn.functional as F
-
 import cv2
-import matplotlib.pyplot as plt
 import os
-
 from matplotlib import cm
+from data.dataset_pseudo import PseudoLabelDataset
+from misc.common import make_object_from_config
+import json
+
+import tqdm
+
+def computeIoU(pred_seg, gd_seg):
+    I = np.sum(np.logical_and(pred_seg, gd_seg))
+    U = np.sum(np.logical_or(pred_seg, gd_seg))
+    return I, U
 
 
-
-def get_dataset(image_set, transform, args):
-    # 使用你的 PseudoLabelDataset
-    from data.dataset_pseudo import PseudoLabelDataset
-    
-    ds = PseudoLabelDataset(
-        image_transforms=transform,
-        root=args.data_root if hasattr(args, 'data_root') else "/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
-        dataset=args.dataset if hasattr(args, 'dataset') else "unc",
-        split=image_set,
-        max_tokens=args.max_tokens if hasattr(args, 'max_tokens') else 20,
-        augment_text_root=args.augment_text_root if hasattr(args, 'augment_text_root') else f"augmentation/data/{args.dataset}/{image_set}",
-        eval_mode=True
-    )
-    num_classes = 2
-    return ds, num_classes
-
-
-def evaluate_pseudo_candidate(model, data_loader, bert_model, device, dataset, output_dir="visualizations"):
+def evaluate_pseudo_candidate(model, data_loader, bert_model, device, output_dir, stream_configs):
     model.eval()
     metric_logger = utils.MetricLogger(delimiter="  ")
-
     # IoU 阈值
     eval_seg_iou_list = [.1, .2, .3, .4, .5, .6, .7, .8, .9]
-
     # 初始化两套指标
-    # --- Pseudo Label vs GT ---
     seg_correct_pseudo = np.zeros(len(eval_seg_iou_list), dtype=np.int32)
     mean_IoU_pseudo = []
     cumI_pseudo, cumU_pseudo = 0, 0
 
-    # --- Best Candidate vs GT ---
     seg_correct_cand = np.zeros(len(eval_seg_iou_list), dtype=np.int32)
     mean_IoU_cand = []
     cumI_cand, cumU_cand = 0, 0
@@ -62,56 +40,55 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, dataset, o
 
     header = 'Test:'
 
-    os.makedirs(output_dir, exist_ok=True)
-    print(f"📝 Saving visualizations to: {output_dir}")
-
-    VIS_FREQ = 50  # 可调：每 N 个 batch 保存一次可视化
+    vis_freq = stream_configs.get("vis_freq", 50)
+    enable_vis = stream_configs.get("enable_visualization", False)  # 是否启用可视化
+    save_new_label = stream_configs.get("save_new_label", False)  # 是否保存新的伪标签
+    if enable_vis:
+        os.makedirs(output_dir, exist_ok=True)
+        print(f"📁 Visualization saved to: {output_dir}")
 
     with torch.no_grad():
-        for idx, data in enumerate(metric_logger.log_every(data_loader, 100, header)):
-            images, sentences, attentions = data['img'], data['txt'], data['attention_mask']
-            images = images.to(device)
-            sentences = sentences.to(device)
-            attentions = attentions.to(device)
+        for idx, data in tqdm.tqdm(enumerate(metric_logger.log_every(data_loader, 100, header))):
+            images = data['img'].to(device)                 # (B, 3, H_t, W_t)
+            sentences = data['txt'].to(device).squeeze(1)              # (B, 1, max_tokens)
+            attentions = data['attention_mask'].to(device).squeeze(1)  # (B, 1, max_tokens)
             B = images.size(0)
+            # 获取原始数据（list of numpy arrays）
+            raw_imgs = data['raw_img']        # list[B], each (H_i, W_i, 3)
+            gts = data['gt']                  # list[B], each (H_i, W_i) or (N, H_i, W_i)
+            all_masks_list = data['all_masks']  # list[B], each is list of (H_i, W_i)
+            txts_raw = data['txt_raw']        # list[B] of str
+            orig_sizes = data['orig_size']    # list[B] of (H_i, W_i)
+            # ----------------------------
+            # 🔹 模型推理（Batched）
+            # ----------------------------
+            if bert_model is not None:
+                last_hidden_states = bert_model(sentences, attention_mask=attentions)[0]
+                embedding = last_hidden_states.permute(0, 2, 1)
+                l_mask = attentions.unsqueeze(-1)
+                output = model(images, embedding, l_mask=l_mask)
+            else:
+                output = model(images, sentences.squeeze(1), l_mask=attentions.squeeze(1))
 
-            raw_items = [dataset.get_raw_item(i + idx * B) for i in range(B)]
+            # 获取预测分数
+            pred_scores = F.softmax(output, dim=1)[:, 1].cpu().numpy()  # (B, H_t, W_t)
 
+            # ----------------------------
+            # 🔹 逐样本后处理（Resize + IoU 计算）
+            # ----------------------------
             for b in range(B):
-                sentence = sentences[b]
-                attention = attentions[b]
+                pred_score = pred_scores[b]  # (H_t, W_t)
+                raw_img = raw_imgs[b]
+                orig_h, orig_w = orig_sizes[b]
+                gt_mask = gts[b]
+                all_masks = all_masks_list[b]
+                sentence_str = txts_raw[b]
 
-                if bert_model is not None:
-                    last_hidden_states = bert_model(sentence, attention_mask=attention)[0]
-                    embedding = last_hidden_states.permute(0, 2, 1)
-                    l_mask = attention.unsqueeze(-1)
-                    output = model(images[b:b+1], embedding, l_mask=l_mask)
-                else:
-                    output = model(images[b:b+1], sentence, l_mask=attention.unsqueeze(-1))
-
-                # 获取模型输出
-                pred_score = F.softmax(output, dim=1)[0, 1].cpu().squeeze(0).numpy()
-                pred_mask = (pred_score > 0.5).astype(bool)  # Pseudo label
-
-                raw_item = raw_items[b]
-                raw_img = raw_item["raw_img"]
-                orig_h, orig_w = raw_img.shape[:2]
-                sentence_str = raw_item["txt"]
-
-                # Resize 函数
-                def resize_mask(mask, size):
-                    return np.array(Image.fromarray(mask.astype(np.uint8)).resize(size, resample=Image.NEAREST))
-
-                def resize_heatmap(heatmap, size):
-                    return np.array(Image.fromarray((heatmap * 255).astype(np.uint8)).resize(size, resample=Image.BILINEAR))
-
-                # Resize 到原始图像分辨率
-                pred_mask = resize_mask(pred_mask, (orig_w, orig_h))
-                pred_score = resize_heatmap(pred_score, (orig_w, orig_h))
-                gt_mask = resize_mask(raw_item["gt"], (orig_w, orig_h))
-
-                # 所有候选 mask
-                all_masks = [resize_mask(m, (orig_w, orig_h)) for m in raw_item["all_masks"]]
+                # Resize 到原始分辨率
+                pred_mask = cv2.resize((pred_score > 0.5).astype(np.uint8), (orig_w, orig_h), interpolation=cv2.INTER_NEAREST).astype(bool)
+                pred_score_vis = cv2.resize(pred_score, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)
+                # gt_mask = cv2.resize(gt_mask, (orig_w, orig_h), interpolation=cv2.INTER_NEAREST)
+                # all_masks = [cv2.resize(m, (orig_w, orig_h), interpolation=cv2.INTER_NEAREST) for m in all_masks]
 
                 # === Step 1: 找最佳候选 ===
                 best_iou = -1
@@ -125,7 +102,7 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, dataset, o
                 if best_candidate is None:
                     best_candidate = pred_mask
 
-                # === Step 2: 计算 Pseudo Label vs GT ===
+                # === Step 2: Pseudo Label vs GT ===
                 I_p, U_p = computeIoU(pred_mask, gt_mask)
                 iou_p = I_p / U_p if U_p > 0 else 0.0
                 cumI_pseudo += I_p
@@ -134,7 +111,7 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, dataset, o
                 for i, thres in enumerate(eval_seg_iou_list):
                     seg_correct_pseudo[i] += (iou_p >= thres)
 
-                # === Step 3: 计算 Best Candidate vs GT ===
+                # === Step 3: Best Candidate vs GT ===
                 I_c, U_c = computeIoU(best_candidate, gt_mask)
                 iou_c = I_c / U_c if U_c > 0 else 0.0
                 cumI_cand += I_c
@@ -143,21 +120,20 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, dataset, o
                 for i, thres in enumerate(eval_seg_iou_list):
                     seg_correct_cand[i] += (iou_c >= thres)
 
-                seg_total += 1  # 样本计数 +1
+                seg_total += 1
 
                 # ================================
                 # ✅ 可视化（可选抽样）
                 # ================================
-                if idx % VIS_FREQ == 0 and b == 0:
+                iter_ = idx * B + b
+                if iter_ % vis_freq == 0:
                     img_bgr = cv2.cvtColor(raw_img, cv2.COLOR_RGB2BGR)
 
-                    # --- 热力图 ---
-                    conf_norm = (pred_score - pred_score.min()) / (pred_score.max() - pred_score.min() + 1e-8)
+                    conf_norm = (pred_score_vis - pred_score_vis.min()) / (pred_score_vis.max() - pred_score_vis.min() + 1e-8)
                     heatmap_rgb = cm.jet(conf_norm)[:, :, :3]
                     heatmap_bgr = cv2.cvtColor((heatmap_rgb * 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
-
                     # --- Mask 叠加 ---
-                    def draw_mask(img, mask, color, alpha=0.5):
+                    def draw_mask(img, mask, color):
                         # print(f"[Debug] pred_mask sum: {mask.sum()} / {mask.size} ({mask.sum() / mask.size * 100:.2f}%)")
                         mask = mask.astype(bool)
                         overlay = img.copy()
@@ -174,7 +150,7 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, dataset, o
                     new_size = (int(W * scale), int(H * scale))
 
                     def resize(x):
-                        return cv2.resize(x, new_size, interpolation=cv2.INTER_CUBIC)
+                        return cv2.resize(x, new_size, interpolation=cv2.INTER_LINEAR)
 
                     img_bgr_r = resize(img_bgr)
                     heatmap_bgr_r = resize(heatmap_bgr)
@@ -207,7 +183,7 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, dataset, o
                     print(f"🎨 Saved visualization: {vis_path}")
 
     # ================================
-    # ✅ 最终评估结果输出（双指标）
+    # ✅ 最终评估结果输出
     # ================================
     mIoU_pseudo = np.mean(mean_IoU_pseudo) if mean_IoU_pseudo else 0.0
     overall_IoU_pseudo = cumI_pseudo / cumU_pseudo if cumU_pseudo > 0 else 0.0
@@ -219,7 +195,6 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, dataset, o
     print('✅ FINAL EVALUATION RESULTS')
     print('='*70)
 
-    # --- Pseudo Label vs GT ---
     print('📌 Pseudo Label vs Ground Truth')
     print(f'  mIoU: {mIoU_pseudo * 100:.2f}%')
     print(f'  Overall IoU: {overall_IoU_pseudo * 100:.2f}%')
@@ -228,7 +203,6 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, dataset, o
 
     print()
 
-    # --- Best Candidate vs GT ---
     print('📌 Best Candidate vs Ground Truth')
     print(f'  mIoU: {mIoU_cand * 100:.2f}%')
     print(f'  Overall IoU: {overall_IoU_cand * 100:.2f}%')
@@ -237,60 +211,42 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, dataset, o
 
     print('='*70)
 
-    # 返回 pseudo mIoU（可用于主函数记录）
     return mIoU_pseudo
-    return mIoU_pseudo
-
-
-def get_transform(args):
-    transforms = [T.Resize(args.img_size, args.img_size),
-                  T.ToTensor(),
-                  T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-                  ]
-
-    return T.Compose(transforms)
-
-
-def computeIoU(pred_seg, gd_seg):
-    I = np.sum(np.logical_and(pred_seg, gd_seg))
-    U = np.sum(np.logical_or(pred_seg, gd_seg))
-
-    return I, U
 
 
 def main(args):
     device = torch.device(args.device)
-    
-    # Use your custom dataset
-    dataset_test, _ = get_dataset(args.split, get_transform(args=args), args)
-    test_sampler = torch.utils.data.SequentialSampler(dataset_test)
+    configs = json.load(open(args.configs, 'r'))
+    dataset = make_object_from_config(configs["dataset"])
+    test_sampler = torch.utils.data.SequentialSampler(dataset)
     data_loader_test = torch.utils.data.DataLoader(
-        dataset_test, 
-        batch_size=1,  # 推荐 batch_size=1，便于与 get_raw_item 对齐
-        sampler=test_sampler, 
-        num_workers=args.workers
+        dataset,
+        batch_size=36, 
+        sampler=test_sampler,
+        num_workers=args.workers,
+        collate_fn=PseudoLabelDataset.eval_collate_fn,
+        pin_memory=True,
+        persistent_workers=True
     )
-
-    print(args.model)
+    # 模型加载（保持不变）
     single_model = segmentation.__dict__[args.model](pretrained='', args=args)
     checkpoint = torch.load(args.resume, map_location='cpu', weights_only=False)
     single_model.load_state_dict(checkpoint['model'])
-    print("Epoch: ", checkpoint['epoch'])
     model = single_model.to(device)
-
+    
     if args.model != 'lavt_one':
-        model_class = BertModel
-        single_bert_model = model_class.from_pretrained(args.ck_bert)
+        bert_model = BertModel.from_pretrained(args.ck_bert)
         if args.ddp_trained_weights:
-            single_bert_model.pooler = None
-        single_bert_model.load_state_dict(checkpoint['bert_model'])
-        bert_model = single_bert_model.to(device)
+            bert_model.pooler = None
+        bert_model.load_state_dict(checkpoint['bert_model'])
+        bert_model = bert_model.to(device)
     else:
         bert_model = None
+    
 
-    # 使用新 evaluation 函数
     resume_ckpt_dir = os.path.dirname(args.resume)
-    evaluate_pseudo_candidate(model, data_loader_test, bert_model, device, dataset_test, output_dir=f"{resume_ckpt_dir}/{args.dataset}_{args.split}_{args.model}")
+    output_dir = f"{resume_ckpt_dir}/{args.dataset}_{args.split}_{args.model}"
+    evaluate_pseudo_candidate(model, data_loader_test, bert_model, device, output_dir=output_dir, stream_configs=configs.get("stream_configs", {}))
 
 
 if __name__ == "__main__":

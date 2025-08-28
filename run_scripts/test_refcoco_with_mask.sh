@@ -3,10 +3,11 @@ python test_with_candidates.py \
     --swin_type base \
     --dataset unc \
     --split val  \
-    --resume output/refcoco_20250821_234057/checkpoints/model_best_refcoco.pth \
+    --resume checkpoints/model_best_refcoco.pth \
+    --configs ./configs/val/config.json \
     --workers 4 \
     --ddp_trained_weights \
     --window12 \
     --img_size 480 \
     --ck_bert ./bert/models \
-    --device cuda:5
+    --device cuda:0 \
