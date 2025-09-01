@@ -19,12 +19,16 @@ class PseudoLabelDataset(data.Dataset):
                  split = "train", 
                  max_tokens=20,
                  max_iters = None,
-                 eval_mode=False):
+                 eval_mode=False,
+                 index_root=None):
         self.root = root
         self.dataset = dataset
         self.split = split
-        
-        self.index_root = f"{self.root}/{self.dataset}/{self.split}_pseudo_score"
+
+        if index_root is not None:
+            self.index_root = index_root
+        else:
+            self.index_root = f"{self.root}/{self.dataset}/{self.split}_pseudo_score"
         self.image_txt_gt_root = f"{self.root}/{self.dataset}/{self.split}_batch"
         self.mask_root = f"{self.root}/{self.dataset}/{self.split}_mask_newB_batch"
         self.augment_text_root = f"{augment_text_root}/{self.dataset}/{self.split}"
@@ -54,6 +58,7 @@ class PseudoLabelDataset(data.Dataset):
 
     def __getitem__(self, idx):
         index_path = self.index_list[idx]
+        index_name = os.path.basename(index_path)
         index_data = json.load(open(index_path, 'r'))
         img_tx_gt_name = index_data["img_txt_gt_file_name"]
         mask_file_name = index_data["mask_file_name"]
@@ -114,7 +119,7 @@ class PseudoLabelDataset(data.Dataset):
             "txt": padded_input_ids,
             "attention_mask": attention_mask,
             "aug_txt": aug_padded_input_ids,
-            "aug_attention_mask": aug_attention_mask,
+            "aug_attention_mask": aug_attention_mask
         }
 
         # Only in eval_mode: include raw data and extra info
@@ -136,6 +141,7 @@ class PseudoLabelDataset(data.Dataset):
                 "orig_size": (orig_h, orig_w),# original size (H, W)
                 "txt_raw": txt,               # original text string
                 "aug_txt_raw": aug_txt,       # augmented text string
+                "index_path": index_path,   # path to the index JSON file
             })
 
         return batch
@@ -152,7 +158,7 @@ class PseudoLabelDataset(data.Dataset):
         keys = elem.keys()
         for key in keys:
             items = [d[key] for d in batch]
-            if key in ['raw_img', 'raw_mask', 'gt', 'all_masks', 'txt_raw', 'aug_txt_raw', 'orig_size']:
+            if key in ['raw_img', 'raw_mask', 'gt', 'all_masks', 'txt_raw', 'aug_txt_raw', 'orig_size', 'index_path']:
                 collated[key] = items
             else:
                 collated[key] = torch.stack(items, dim=0)
@@ -183,10 +189,10 @@ class PseudoLabelDataset(data.Dataset):
     
 
 
-def get_dataset(root: str, augment_text_root: str, dataset: str, split: str, image_transforms=None, max_tokens=20, eval_mode=False, max_iters=None):
+def get_dataset(root: str, augment_text_root: str, dataset: str, split: str, image_transforms=None, max_tokens=20, eval_mode=False, max_iters=None, index_root=None):
     """
     Get the PseudoLabelDataset.
-    
+   
     Args:
         root (str): Root directory of the dataset.
         dataset (str): Dataset name (e.g., 'unc').
@@ -205,7 +211,7 @@ def get_dataset(root: str, augment_text_root: str, dataset: str, split: str, ima
                       ]
         image_transforms = T.Compose(transforms)
 
-    return PseudoLabelDataset(image_transforms, root, augment_text_root, dataset, split, max_tokens, eval_mode=eval_mode, max_iters=max_iters)
+    return PseudoLabelDataset(image_transforms, root, augment_text_root, dataset, split, max_tokens, eval_mode=eval_mode, max_iters=max_iters, index_root=index_root)
 
 if __name__ == "__main__":
     dataset = get_dataset(

@@ -1,4 +1,3 @@
-
 import torch
 import torch.utils.data
 from bert.modeling_bert import BertModel
@@ -13,14 +12,43 @@ from matplotlib import cm
 from data.dataset_pseudo import PseudoLabelDataset
 from misc.common import make_object_from_config
 import json
+from misc.mask import postprocess_binary_mask, fill_holes_in_components
 
 import tqdm
+
+def extract_dataset_split_from_path(path: str):
+    # ".../dataset/split/filename"
+    parts = path.split('/')
+    if len(parts) < 3:
+        raise ValueError("Path format is incorrect. Expected format: '.../dataset/split/filename'")
+    dataset = parts[-3]
+    split = parts[-2]
+    return dataset, split
 
 def computeIoU(pred_seg, gd_seg):
     I = np.sum(np.logical_and(pred_seg, gd_seg))
     U = np.sum(np.logical_or(pred_seg, gd_seg))
     return I, U
 
+
+def save_new_index(new_mask_id, index_path, save_root):
+    # Create save path
+    dataset, split = extract_dataset_split_from_path(index_path)
+    file_name = os.path.basename(index_path)
+    save_dir = os.path.join(save_root, dataset, f"{split}_pseudo_score")
+    os.makedirs(save_dir, exist_ok=True)
+    save_path = os.path.join(save_dir, file_name)
+
+    # Read and modify the index file
+    index_data = json.load(open(index_path, 'r'))
+    last_predicted_id = index_data.get("predicted_mask_id", -1)
+    index_data["predicted_mask_id"] = new_mask_id
+    index_data["last_predicted_mask_id"] = last_predicted_id
+    
+    boostrap_iteration = 1 if "boostrap_iteration" not in index_data else index_data["boostrap_iteration"] + 1
+    index_data["boostrap_iteration"] = boostrap_iteration
+    
+    json.dump(index_data, open(save_path, 'w'), indent=4)
 
 def evaluate_pseudo_candidate(model, data_loader, bert_model, device, output_dir, stream_configs):
     model.eval()
@@ -35,6 +63,10 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, output_dir
     seg_correct_cand = np.zeros(len(eval_seg_iou_list), dtype=np.int32)
     mean_IoU_cand = []
     cumI_cand, cumU_cand = 0, 0
+    
+    seg_correct_raw = np.zeros(len(eval_seg_iou_list), dtype=np.int32)
+    mean_IoU_raw = []
+    cumI_raw, cumU_raw = 0, 0
 
     seg_total = 0  # 样本总数
 
@@ -43,6 +75,7 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, output_dir
     vis_freq = stream_configs.get("vis_freq", 50)
     enable_vis = stream_configs.get("enable_visualization", False)  # 是否启用可视化
     save_new_label = stream_configs.get("save_new_label", False)  # 是否保存新的伪标签
+    new_label_save_root = stream_configs.get("new_label_save_root", "./dataset")  # 新伪标签保存根目录
     if enable_vis:
         os.makedirs(output_dir, exist_ok=True)
         print(f"📁 Visualization saved to: {output_dir}")
@@ -56,9 +89,11 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, output_dir
             # 获取原始数据（list of numpy arrays）
             raw_imgs = data['raw_img']        # list[B], each (H_i, W_i, 3)
             gts = data['gt']                  # list[B], each (H_i, W_i) or (N, H_i, W_i)
-            all_masks_list = data['all_masks']  # list[B], each is list of (H_i, W_i)
+            all_masks_list = data['all_masks']# list[B], each is list of (H_i, W_i)
             txts_raw = data['txt_raw']        # list[B] of str
             orig_sizes = data['orig_size']    # list[B] of (H_i, W_i)
+            raw_masks = data['raw_mask']      # list[B] of (H_i, W_i)
+            index_paths = data['index_path']
             # ----------------------------
             # 🔹 模型推理（Batched）
             # ----------------------------
@@ -83,22 +118,23 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, output_dir
                 gt_mask = gts[b]
                 all_masks = all_masks_list[b]
                 sentence_str = txts_raw[b]
+                raw_mask = raw_masks[b]
 
                 # Resize 到原始分辨率
                 pred_mask = cv2.resize((pred_score > 0.5).astype(np.uint8), (orig_w, orig_h), interpolation=cv2.INTER_NEAREST).astype(bool)
                 pred_score_vis = cv2.resize(pred_score, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)
-                # gt_mask = cv2.resize(gt_mask, (orig_w, orig_h), interpolation=cv2.INTER_NEAREST)
-                # all_masks = [cv2.resize(m, (orig_w, orig_h), interpolation=cv2.INTER_NEAREST) for m in all_masks]
 
                 # === Step 1: 找最佳候选 ===
                 best_iou = -1
                 best_candidate = None
-                for cand in all_masks:
+                best_id = -1
+                for mask_id, cand in enumerate(all_masks):
                     i, u = computeIoU(pred_mask, cand)
                     iou = i / u if u > 0 else 0.0
                     if iou > best_iou:
                         best_iou = iou
                         best_candidate = cand
+                        best_id = mask_id
                 if best_candidate is None:
                     best_candidate = pred_mask
 
@@ -119,8 +155,23 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, output_dir
                 mean_IoU_cand.append(iou_c)
                 for i, thres in enumerate(eval_seg_iou_list):
                     seg_correct_cand[i] += (iou_c >= thres)
-
+                
+                # === Step 4: Raw Mask vs GT ===
+                raw_mask = postprocess_binary_mask(best_candidate.copy(), max_hole_area=100, max_sprinkle_area=100)
+                raw_mask = fill_holes_in_components(raw_mask)
+                I_r, U_r = computeIoU(raw_mask, gt_mask)
+                iou_r = I_r / U_r if U_r > 0 else 0.0
+                cumI_raw += I_r
+                cumU_raw += U_r
+                mean_IoU_raw.append(iou_r)
+                for i, thres in enumerate(eval_seg_iou_list):
+                    seg_correct_raw[i] += (iou_r >= thres)
+                
                 seg_total += 1
+                
+                # === Step 5: 保存新的伪标签（可选） ===
+                if save_new_label:
+                    save_new_index(best_id, index_paths[b], new_label_save_root)
 
                 # ================================
                 # ✅ 可视化（可选抽样）
@@ -143,6 +194,7 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, output_dir
                     img_pseudo = draw_mask(img_bgr.copy(), pred_mask, (0, 0, 255))     # Red
                     img_cand = draw_mask(img_bgr.copy(), best_candidate, (0, 255, 255)) # Yellow
                     img_gt = draw_mask(img_bgr.copy(), gt_mask, (0, 255, 0))           # Green
+                    img_raw = draw_mask(img_bgr.copy(), raw_mask, (255, 0, 0))           # Blue
 
                     # --- 分辨率适配 ---
                     H, W = img_bgr.shape[:2]
@@ -157,11 +209,12 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, output_dir
                     img_pseudo_r = resize(img_pseudo)
                     img_cand_r = resize(img_cand)
                     img_gt_r = resize(img_gt)
+                    img_raw_r = resize(img_raw)
 
                     # --- 拼接 ---
                     row1 = np.hstack([img_bgr_r, heatmap_bgr_r])
                     row2 = np.hstack([img_pseudo_r, img_cand_r])
-                    row3 = np.hstack([img_gt_r, np.zeros_like(img_gt_r)])
+                    row3 = np.hstack([img_gt_r, img_raw_r])
                     combined = np.vstack([row1, row2, row3])
 
                     # --- 文本 ---
@@ -170,7 +223,7 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, output_dir
                     font_scale, thickness = 0.6, 1
 
                     line1 = f"Text: {sentence_str}"
-                    line2 = f"Pseudo IoU: {iou_p:.3f} | Cand IoU: {iou_c:.3f}"
+                    line2 = f"Pseudo IoU: {iou_p:.3f} | Cand IoU: {iou_c:.3f} | Raw IoU: {iou_r:.3f}"
 
                     cv2.putText(text_area, line1, (10, 25), font, font_scale, (0, 0, 0), thickness)
                     cv2.putText(text_area, line2, (10, 55), font, font_scale, (0, 0, 0), thickness)
@@ -190,6 +243,9 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, output_dir
 
     mIoU_cand = np.mean(mean_IoU_cand) if mean_IoU_cand else 0.0
     overall_IoU_cand = cumI_cand / cumU_cand if cumU_cand > 0 else 0.0
+    
+    mIoU_raw = np.mean(mean_IoU_raw) if mean_IoU_raw else 0.0
+    overall_IoU_raw = cumI_raw / cumU_raw if cumU_raw > 0 else 0.0
 
     print('\n' + '='*70)
     print('✅ FINAL EVALUATION RESULTS')
@@ -208,6 +264,13 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, output_dir
     print(f'  Overall IoU: {overall_IoU_cand * 100:.2f}%')
     for thres, val in zip(eval_seg_iou_list, seg_correct_cand):
         print(f'  Precision@{thres:.1f}: {val / seg_total * 100:.2f}%')
+    
+    print()
+    print('📌 Raw Mask vs Ground Truth')
+    print(f'  mIoU: {mIoU_raw * 100:.2f}%')
+    print(f'  Overall IoU: {overall_IoU_raw * 100:.2f}%')
+    for thres, val in zip(eval_seg_iou_list, seg_correct_raw):
+        print(f'  Precision@{thres:.1f}: {val / seg_total * 100:.2f}%')
 
     print('='*70)
 
@@ -217,11 +280,13 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, output_dir
 def main(args):
     device = torch.device(args.device)
     configs = json.load(open(args.configs, 'r'))
-    dataset = make_object_from_config(configs["dataset"])
+    dataset_configs = configs["dataset"]
+    stream_configs = configs.get("stream_configs", {})
+    dataset = make_object_from_config(dataset_configs)
     test_sampler = torch.utils.data.SequentialSampler(dataset)
     data_loader_test = torch.utils.data.DataLoader(
         dataset,
-        batch_size=36, 
+        batch_size=6, 
         sampler=test_sampler,
         num_workers=args.workers,
         collate_fn=PseudoLabelDataset.eval_collate_fn,
@@ -230,22 +295,21 @@ def main(args):
     )
     # 模型加载（保持不变）
     single_model = segmentation.__dict__[args.model](pretrained='', args=args)
-    checkpoint = torch.load(args.resume, map_location='cpu', weights_only=False)
+    checkpoint = torch.load(stream_configs["resume"], map_location='cpu', weights_only=False)
     single_model.load_state_dict(checkpoint['model'])
     model = single_model.to(device)
     
     if args.model != 'lavt_one':
-        bert_model = BertModel.from_pretrained(args.ck_bert)
+        bert_model = BertModel.from_pretrained(stream_configs["ck_bert"])
         if args.ddp_trained_weights:
             bert_model.pooler = None
         bert_model.load_state_dict(checkpoint['bert_model'])
         bert_model = bert_model.to(device)
     else:
         bert_model = None
-    
 
-    resume_ckpt_dir = os.path.dirname(args.resume)
-    output_dir = f"{resume_ckpt_dir}/{args.dataset}_{args.split}_{args.model}"
+    resume_ckpt_dir = os.path.dirname(stream_configs["resume"])
+    output_dir = f"{resume_ckpt_dir}/{dataset_configs['args']['dataset']}_{dataset_configs['args']['split']}_{args.model}"
     evaluate_pseudo_candidate(model, data_loader_test, bert_model, device, output_dir=output_dir, stream_configs=configs.get("stream_configs", {}))
 
 

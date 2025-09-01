@@ -104,7 +104,6 @@ class ConsistentDiceLoss(nn.Module):
         # 确保输入是概率分布 (应用softmax)
         # pred_clean 和 pred_aug 的形状是 [B, 2, H, W]
         # 我们沿类别维度 (dim=1) 应用 softmax，得到每个像素属于前景的概率
-        pred_clean = pred_clean.detach()
         prob_clean = F.softmax(pred_clean, dim=1)  # [B, 2, H, W]
         prob_aug = F.softmax(pred_aug, dim=1)      # [B, 2, H, W]
 

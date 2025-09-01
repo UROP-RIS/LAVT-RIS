@@ -1,5 +1,6 @@
 import datetime
 from torch.cuda.amp import autocast, GradScaler
+from utils import NativeScalerWithGradNormCount
 import os
 import time
 import torch
@@ -130,14 +131,17 @@ def train_one_epoch(model, label_criterion, consistent_criterion, alpha, optimiz
                     iterations, bert_model, writer=None):
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
-    scaler = GradScaler()
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value}'))
     metric_logger.add_meter('label_loss', utils.SmoothedValue(window_size=20, fmt='{value:.4f}'))
     metric_logger.add_meter('consistent_loss', utils.SmoothedValue(window_size=20, fmt='{value:.4f}'))
     header = 'Epoch: [{}]'.format(epoch)
     
+    loss_scaler = NativeScalerWithGradNormCount()
+    
     for i, data in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
         # image, target, sentences, attentions, aug_sentences, aug_attentions = data
+        optimizer.zero_grad()
+        
         image = data['img']
         target = data['target']
         sentences = data['txt']
@@ -155,43 +159,30 @@ def train_one_epoch(model, label_criterion, consistent_criterion, alpha, optimiz
         aug_attentions = aug_attentions.cuda(non_blocking=True).squeeze(1)
         aug_image = aug_image.cuda(non_blocking=True)
 
-        with autocast():
-            if bert_model is not None:
-                bert_model.eval()
-                model.eval()
-                freeze_model(model)
-                freeze_model(bert_model)
-                with torch.no_grad():
-                    aug_last_hidden_states = bert_model(aug_sentences, attention_mask=aug_attentions)[0]
-                    aug_embedding = aug_last_hidden_states.permute(0, 2, 1)
-                    aug_l_mask = aug_attentions.unsqueeze(-1)
-                    output_student = model(aug_image, aug_embedding, l_mask=aug_l_mask)
-                
-                unfreeze_model(model)
-                unfreeze_model(bert_model)
-                bert_model.train()
-                model.train()
-                last_hidden_states = bert_model(sentences, attention_mask=attentions)[0]
-                embedding = last_hidden_states.permute(0, 2, 1)
-                l_mask = attentions.unsqueeze(-1)
-                output_teacher = model(image, embedding, l_mask=l_mask)
-
-            else:
-                model.eval()
-                output_teacher = model(image, sentences, l_mask=attentions)
-                model.train()
-                output_student = model(aug_image, aug_sentences, l_mask=aug_attentions)
-                
-            label_loss = label_criterion(output_teacher, target) * alpha
-            output_student_ref = output_student.clone().detach()
-            consistency_loss = consistent_criterion(output_student_ref, output_teacher, scale_factor = 1.0 - alpha)
-            total_loss = label_loss + consistency_loss
-
-        optimizer.zero_grad()
-        scaler.scale(total_loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
-
+        # Primary branch
+        with torch.cuda.amp.autocast():
+            last_hidden_states = bert_model(sentences, attention_mask=attentions)[0]
+            embedding = last_hidden_states.permute(0, 2, 1)
+            l_mask = attentions.unsqueeze(-1)
+            output_primary = model(image, embedding, l_mask=l_mask)
+            label_loss = label_criterion(output_primary, target) * alpha  
+            loss_scaler(
+                loss=label_loss, optimizer=optimizer, clip_grad=None, parameters=model.parameters(), create_graph=False, update_grad=False
+            )
+            
+        # Distilled branch
+        with torch.cuda.amp.autocast():
+            aug_last_hidden_states = bert_model(aug_sentences, attention_mask=aug_attentions)[0]
+            aug_embedding = aug_last_hidden_states.permute(0, 2, 1)
+            aug_l_mask = aug_attentions.unsqueeze(-1)
+            output_aug = model(aug_image, aug_embedding, l_mask=aug_l_mask)
+            consistency_loss = consistent_criterion(output_primary.detach(), output_aug, scale_factor = 1.0 - alpha)    
+        
+        grad_norm = loss_scaler(
+            loss=consistency_loss, optimizer=optimizer, clip_grad=None, parameters=model.parameters(), create_graph=False, update_grad=True
+        )
+        
+        total_loss = label_loss + consistency_loss
         lr_scheduler.step()
         metric_logger.update(
             loss=total_loss.item(),
