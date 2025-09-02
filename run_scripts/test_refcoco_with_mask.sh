@@ -2,8 +2,7 @@ python test_with_candidates.py \
     --model lavt \
     --swin_type base \
     --dataset unc \
-    --split val  \
-    --resume checkpoints/model_best_refcoco.pth \
+    --split testB  \
     --configs ./configs/val/config.json \
     --workers 4 \
     --ddp_trained_weights \

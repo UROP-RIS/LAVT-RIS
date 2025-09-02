@@ -6,7 +6,7 @@
             "root": "/localdata/tzhangbu/dataset/refcoco",
             "augment_text_root": "augmentation/data",
             "dataset": "unc",
-            "split": "val",
+            "split": "testB",
             "max_tokens": 20,
             "eval_mode": true
         }
@@ -14,6 +14,11 @@
     "stream_configs": {
         "vis_freq": 100,
         "enable_visualization": true,
-        "save_new_label": true
+        "save_new_label": true,
+        "new_label_save_root": "/localdata/zguobd/LAVT-RIS/dataset",
+        "resume": "output/refcoco_20250901_202822/checkpoints/model_last_refcoco.pth",
+        "ck_bert": "./bert/models",
+        "selection_criterion": "iou",
+        "sim_ratio": 0.5
     }
 }

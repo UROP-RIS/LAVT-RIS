@@ -13,7 +13,8 @@
                             "augment_text_root": "augmentation/data",
                             "dataset": "unc",
                             "split": "train",
-                            "max_tokens": 20
+                            "max_tokens": 20,
+                            "index_root": "./dataset/unc/train_pseudo_score"
                         }
                     }
                 ]
@@ -35,11 +36,6 @@
                 }
             },
             "alpha": 0.5
-        },
-        "stream_configs": {
-            "enable_image_masking": true,
-            "image_mask_ratio": 0.75,
-            "image_mask_patch_size": 16
         }
     },
     "val": {

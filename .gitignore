@@ -3,6 +3,7 @@
 /bert/models
 /models/refcoco
 /models
+/dataset
 
 __pycache__
 *.pyc

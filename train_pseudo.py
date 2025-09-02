@@ -13,9 +13,11 @@ import transforms as T
 import utils
 import numpy as np
 import json
+from augmentation.mask_aug import patchify, unpatchify, random_masking
 from misc.common import make_object_from_config
 from misc.workspace import create_workspace, save_configs_and_args
 from torch.utils.tensorboard import SummaryWriter
+
 
 
 # ----------------------- 重要修改开始 -----------------------
@@ -128,7 +130,11 @@ def unfreeze_model(model):
 
 
 def train_one_epoch(model, label_criterion, consistent_criterion, alpha, optimizer, data_loader, lr_scheduler, epoch, print_freq,
-                    iterations, bert_model, writer=None):
+                    iterations, bert_model, writer=None, stream_configs=None):
+    enable_masking = stream_configs.get("enable_image_masking", False)
+    if enable_masking:
+        mask_ratio = stream_configs.get("mask_ratio", 0.75)
+
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value}'))
@@ -148,8 +154,7 @@ def train_one_epoch(model, label_criterion, consistent_criterion, alpha, optimiz
         attentions = data['attention_mask']
         aug_sentences = data['aug_txt']
         aug_attentions = data['aug_attention_mask']
-        aug_image = image.clone()
-        
+        aug_image = image.clone()    
         
         image = image.cuda(non_blocking=True)
         target = target.cuda(non_blocking=True)
@@ -158,6 +163,12 @@ def train_one_epoch(model, label_criterion, consistent_criterion, alpha, optimiz
         aug_sentences = aug_sentences.cuda(non_blocking=True).squeeze(1)
         aug_attentions = aug_attentions.cuda(non_blocking=True).squeeze(1)
         aug_image = aug_image.cuda(non_blocking=True)
+        
+        if enable_masking:
+            aug_image = patchify(aug_image, stream_configs["image_mask_patch_size"])
+            aug_image = random_masking(aug_image, stream_configs["image_mask_ratio"])
+            aug_image = unpatchify(aug_image, stream_configs["image_mask_patch_size"])
+
 
         # Primary branch
         with torch.cuda.amp.autocast():
@@ -336,7 +347,7 @@ def main(args):
         
         ## Train
         train_one_epoch(model, label_criterion, consistent_criterion, alpha, optimizer, data_loader, lr_scheduler, epoch, args.print_freq,
-                        iterations, bert_model, writer if utils.get_rank() == 0 else None)
+                        iterations, bert_model, writer if utils.get_rank() == 0 else None, configs["train"]["stream_configs"])
         
         ## Evaluate
         iou, overallIoU = evaluate(model, data_loader_test, bert_model, writer if utils.get_rank() == 0 else None, epoch)

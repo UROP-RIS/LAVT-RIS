@@ -63,6 +63,7 @@ class PseudoLabelDataset(data.Dataset):
         img_tx_gt_name = index_data["img_txt_gt_file_name"]
         mask_file_name = index_data["mask_file_name"]
         predicted_mask_id = index_data["predicted_mask_id"]
+        scores = index_data["similarity_score"]  # similarity scores
 
         # Load image-text-ground truth
         img_txt_gt_path = os.path.join(self.image_txt_gt_root, img_tx_gt_name)
@@ -121,6 +122,7 @@ class PseudoLabelDataset(data.Dataset):
             "aug_txt": aug_padded_input_ids,
             "aug_attention_mask": aug_attention_mask
         }
+        
 
         # Only in eval_mode: include raw data and extra info
         if self.eval_mode:
@@ -129,6 +131,7 @@ class PseudoLabelDataset(data.Dataset):
             for candidate in mask_candidates:
                 m = pycocotools_mask.decode(candidate["rle"])
                 all_masks.append(m)  # each is H x W binary
+            
 
             # GT mask
             gt_mask = data_dict["mask_batch"]  # assuming this is the ground truth
@@ -142,6 +145,7 @@ class PseudoLabelDataset(data.Dataset):
                 "txt_raw": txt,               # original text string
                 "aug_txt_raw": aug_txt,       # augmented text string
                 "index_path": index_path,   # path to the index JSON file
+                "scores": scores              # similarity scores
             })
 
         return batch
@@ -158,7 +162,7 @@ class PseudoLabelDataset(data.Dataset):
         keys = elem.keys()
         for key in keys:
             items = [d[key] for d in batch]
-            if key in ['raw_img', 'raw_mask', 'gt', 'all_masks', 'txt_raw', 'aug_txt_raw', 'orig_size', 'index_path']:
+            if key in ['raw_img', 'raw_mask', 'gt', 'all_masks', 'txt_raw', 'aug_txt_raw', 'orig_size', 'index_path', "scores"]:
                 collated[key] = items
             else:
                 collated[key] = torch.stack(items, dim=0)

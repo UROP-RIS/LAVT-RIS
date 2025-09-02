@@ -3,8 +3,8 @@ python test.py \
     --swin_type base \
     --dataset refcoco \
     --split val  \
-    --resume output/refcoco_20250821_234057/checkpoints/model_best_refcoco.pth \
-    --workers 4 \
+    --resume output/refcoco_20250821_234057/checkpoints/refcoco_pseudo_consistent.pth \
+    --workers 8 \
     --ddp_trained_weights \
     --window12 \
     --img_size 480 \
