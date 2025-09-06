@@ -94,6 +94,7 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, output_dir
             orig_sizes = data['orig_size']    # list[B] of (H_i, W_i)
             raw_masks = data['raw_mask']      # list[B] of (H_i, W_i)
             index_paths = data['index_path']
+            sim_scores = data["scores"]
             # ----------------------------
             # 🔹 模型推理（Batched）
             # ----------------------------
@@ -107,6 +108,45 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, output_dir
 
             # 获取预测分数
             pred_scores = F.softmax(output, dim=1)[:, 1].cpu().numpy()  # (B, H_t, W_t)
+            sigmoid_pred_scores_map = F.sigmoid(output)[:, 1].cpu()
+            
+            sigmoid_sim_scores = []   # B x num_cands
+            sigmoid_pred_scores = []  # B x num_cands
+            num_cands = []
+            for b in range(B):
+                
+                ## similarity sigmoid scores
+                tensor_data = torch.tensor([x if x is not None else float('nan') for x in sim_scores[b]])
+                mask = ~torch.isnan(tensor_data)
+                valid = tensor_data[mask]
+                num_cand = valid.size(0)
+                num_cands.append(num_cand)
+                
+                # min max scaling normalization
+                valid_min, valid_max, valid_mean = valid.min(), valid.max(), valid.mean()
+                valid = (valid - 5.0) / 5.0  # scale to roughly [-1, 1]
+                valid_sigmoid = torch.sigmoid(valid)
+            
+                sigmoid_sim_score = torch.zeros_like(tensor_data)
+                sigmoid_sim_score.masked_scatter_(mask, valid_sigmoid)
+                sigmoid_sim_score = sigmoid_sim_score.cpu().numpy()
+                
+                # min-max normalization
+                sigmoid_sim_scores.append(sigmoid_sim_score)
+                
+                ## Pred scores average pooling on mask candidates
+                all_masks = all_masks_list[b] 
+                all_scores = []
+                for i in range(num_cand):
+                    cand = all_masks[i]
+                    cand = torch.tensor(cand.astype(np.float32))
+                    cand = F.interpolate(cand.unsqueeze(0).unsqueeze(0), size=sigmoid_pred_scores_map[b].shape, mode='nearest').squeeze(0).squeeze(0)  # (H_t, W_t)
+                    cand_scores_map = sigmoid_pred_scores_map[b] * cand # (H_t, W_t)
+                    area = cand.sum()
+                    eps = 1e-8
+                    avg_score = cand_scores_map.sum() / (area + eps)
+                    all_scores.append(avg_score.item())
+                sigmoid_pred_scores.append(all_scores)
 
             # ----------------------------
             # 🔹 逐样本后处理（Resize + IoU 计算）
@@ -119,24 +159,49 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, output_dir
                 all_masks = all_masks_list[b]
                 sentence_str = txts_raw[b]
                 raw_mask = raw_masks[b]
+                sigmoid_sim_score = sigmoid_sim_scores[b]
+                sigmoid_pred_score = sigmoid_pred_scores[b]
+                num_cand = num_cands[b]
 
                 # Resize 到原始分辨率
                 pred_mask = cv2.resize((pred_score > 0.5).astype(np.uint8), (orig_w, orig_h), interpolation=cv2.INTER_NEAREST).astype(bool)
                 pred_score_vis = cv2.resize(pred_score, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)
 
                 # === Step 1: 找最佳候选 ===
-                best_iou = -1
-                best_candidate = None
-                best_id = -1
-                for mask_id, cand in enumerate(all_masks):
-                    i, u = computeIoU(pred_mask, cand)
-                    iou = i / u if u > 0 else 0.0
-                    if iou > best_iou:
-                        best_iou = iou
-                        best_candidate = cand
-                        best_id = mask_id
-                if best_candidate is None:
-                    best_candidate = pred_mask
+                if stream_configs["selection_criterion"] == "iou":
+                    best_iou = -1
+                    best_candidate = None
+                    best_id = -1
+                    for mask_id, cand in enumerate(all_masks):
+                        i, u = computeIoU(pred_mask, cand)
+                        iou = i / u if u > 0 else 0.0
+                        if iou > best_iou:
+                            best_iou = iou
+                            best_candidate = cand
+                            best_id = mask_id
+                    if best_candidate is None:
+                        best_candidate = pred_mask
+                elif stream_configs["selection_criterion"] == "weighted":
+                    best_weighted_score = -1
+                    best_sim_score = -1
+                    best_pred_score = -1
+                    best_candidate = None
+                    best_id = -1
+                    sim_ratio = stream_configs.get("sim_ratio", 1.0)
+                    for mask_id in range(num_cand):
+                        cand = all_masks[mask_id]
+                        sim_weight = sigmoid_sim_score[mask_id]
+                        pred_weight = sigmoid_pred_score[mask_id]
+                        weight = sim_weight * (1.0 - sim_ratio) + pred_weight * sim_ratio
+                        if weight > best_weighted_score:
+                            best_weighted_score = weight
+                            best_sim_score = sim_weight
+                            best_pred_score = pred_weight
+                            best_candidate = cand
+                            best_id = mask_id
+                    if best_candidate is None:
+                        best_candidate = pred_mask
+
 
                 # === Step 2: Pseudo Label vs GT ===
                 I_p, U_p = computeIoU(pred_mask, gt_mask)

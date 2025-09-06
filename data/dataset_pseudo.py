@@ -9,6 +9,7 @@ import re
 import json
 from pycocotools import mask as pycocotools_mask
 import torch
+import cv2
 
 
 class PseudoLabelDataset(data.Dataset):
@@ -20,7 +21,8 @@ class PseudoLabelDataset(data.Dataset):
                  max_tokens=20,
                  max_iters = None,
                  eval_mode=False,
-                 index_root=None):
+                 index_root=None,
+                 target_mode="hard"):
         self.root = root
         self.dataset = dataset
         self.split = split
@@ -51,11 +53,64 @@ class PseudoLabelDataset(data.Dataset):
         self.max_tokens = max_tokens
         self.image_transforms = image_transforms
         self.eval_mode = eval_mode
+        
+        self.target_mode = target_mode
             
     
     def __len__(self):
         return len(self.index_list)
 
+    def _get_max_softmax_values(self, data: list):
+        tensor_data = torch.tensor([x if x is not None else float('nan') for x in data])
+        mask = ~torch.isnan(tensor_data)
+        valid = tensor_data[mask]
+        valid_count = valid.shape[0]
+
+        if valid_count > 0:
+            valid_softmax = torch.softmax(valid, dim=0)
+            result = torch.zeros_like(tensor_data)
+            result.masked_scatter_(mask, valid_softmax)
+            max_values, indices = torch.max(result, dim=0)
+            return max_values, indices, valid_count
+        
+        else:
+            return 0, -1, 0
+    
+    def _scores2realprob(self, scores: list):
+        
+        NUM = 4
+        probs = [0 for _ in range(len(scores))]   
+        processed = scores
+        total_valid_count = 0
+        for i in range(NUM):
+            max_softmaxed, indices, valid_count = self._get_max_softmax_values(processed)
+            if indices == -1:
+                break
+            if i == 0:
+                probs[indices] = 0.800 * max_softmaxed + 0.01
+                total_valid_count = valid_count
+            elif i == 1:
+                probs[indices] = 0.310 * max_softmaxed + 0.01
+            elif i == 2:
+                probs[indices] = 0.109 * max_softmaxed + 0.01
+            elif i == 3:
+                probs[indices] = 0.0380 * max_softmaxed + 0.01
+
+            processed[indices] = float('nan')
+        
+        return probs, total_valid_count
+    
+    def _make_soft_target(self, probs: torch.Tensor, candidates: list[np.ndarray]):
+        ## Make soft target mask from multiple candidates and their probabilities
+        ## Overlap: take max value
+        h, w = candidates[0].shape
+        soft_target = torch.zeros((h, w), dtype=torch.float32)
+        for i, m in enumerate(candidates):
+            mask_tensor = torch.tensor(m, dtype=torch.float32)
+            soft_target = torch.max(soft_target, probs[i] * mask_tensor)
+        return soft_target.numpy()
+
+        
     def __getitem__(self, idx):
         index_path = self.index_list[idx]
         index_name = os.path.basename(index_path)
@@ -64,7 +119,7 @@ class PseudoLabelDataset(data.Dataset):
         mask_file_name = index_data["mask_file_name"]
         predicted_mask_id = index_data["predicted_mask_id"]
         scores = index_data["similarity_score"]  # similarity scores
-
+        
         # Load image-text-ground truth
         img_txt_gt_path = os.path.join(self.image_txt_gt_root, img_tx_gt_name)
         img_txt_gt = np.load(img_txt_gt_path, allow_pickle=True)
@@ -76,16 +131,37 @@ class PseudoLabelDataset(data.Dataset):
 
         # Load mask candidates
         mask_path = os.path.join(self.mask_root, mask_file_name)
-        mask_candidates = json.load(open(mask_path, 'r'))["annotation"]
-        rle_mask = mask_candidates[predicted_mask_id]["rle"]
+        mask_candidates_rle = json.load(open(mask_path, 'r'))["annotation"]
+        rle_mask = mask_candidates_rle[predicted_mask_id]["rle"]
         raw_mask = pycocotools_mask.decode(rle_mask)  # H x W, binary
+        
+        if self.target_mode == "hard":
+            # Convert to PIL for transforms
+            img = Image.fromarray(raw_img.astype(np.uint8)).convert("RGB")
+            mask = Image.fromarray(raw_mask.astype(np.uint8)).convert("P")
+            transformed_img, transformed_mask = self.image_transforms(img, mask)
+        else:  # soft target mode
+            candidates = []
+            for candidate in mask_candidates_rle:
+                m = pycocotools_mask.decode(candidate["rle"])
+                candidates.append(m)
+            
+            probs, total_valid_count = self._scores2realprob(scores)
+            mask = self._make_soft_target(probs, candidates[:total_valid_count])
 
-        # Convert to PIL for transforms
-        img = Image.fromarray(raw_img.astype(np.uint8)).convert("RGB")
-        mask = Image.fromarray(raw_mask.astype(np.uint8)).convert("P")
-
-        # Apply transforms
-        transformed_img, transformed_mask = self.image_transforms(img, mask)
+            # mask = Image.fromarray(mask, mode="F")
+            # img = Image.fromarray(raw_img.astype(np.uint8)).convert("RGB")
+            ## Transform mask and image
+            image = cv2.resize(raw_img, (480, 480), interpolation=cv2.INTER_LINEAR)
+            ## NORMALIZE image to [0, 1] with std and mean
+            image = image.astype(np.float32) / 255.0
+            image = (image - np.array([0.485, 0.456, 0.406])) / np.array([0.229, 0.224, 0.225])
+            mask = cv2.resize(mask, (480, 480), interpolation=cv2.INTER_LINEAR)
+            mask = np.clip(mask, 0.0, 1.0)
+            
+            transformed_img = torch.tensor(image, dtype=torch.float32).permute(2, 0, 1)  # C x H x W
+            transformed_mask = torch.tensor(mask, dtype=torch.float32)      # 1 x H x W
+            
 
         # Tokenize original and augmented text
         padded_input_ids, attention_mask = self.tokenize_text(txt)
@@ -128,7 +204,7 @@ class PseudoLabelDataset(data.Dataset):
         if self.eval_mode:
             # Convert raw mask to binary array for all candidates
             all_masks = []
-            for candidate in mask_candidates:
+            for candidate in mask_candidates_rle:
                 m = pycocotools_mask.decode(candidate["rle"])
                 all_masks.append(m)  # each is H x W binary
             
@@ -193,7 +269,7 @@ class PseudoLabelDataset(data.Dataset):
     
 
 
-def get_dataset(root: str, augment_text_root: str, dataset: str, split: str, image_transforms=None, max_tokens=20, eval_mode=False, max_iters=None, index_root=None):
+def get_dataset(root: str, augment_text_root: str, dataset: str, split: str, image_transforms=None, max_tokens=20, eval_mode=False, max_iters=None, index_root=None, target_mode="hard") -> PseudoLabelDataset:
     """
     Get the PseudoLabelDataset.
    
@@ -215,30 +291,41 @@ def get_dataset(root: str, augment_text_root: str, dataset: str, split: str, ima
                       ]
         image_transforms = T.Compose(transforms)
 
-    return PseudoLabelDataset(image_transforms, root, augment_text_root, dataset, split, max_tokens, eval_mode=eval_mode, max_iters=max_iters, index_root=index_root)
+    return PseudoLabelDataset(image_transforms, root, augment_text_root, dataset, split, max_tokens, eval_mode=eval_mode, max_iters=max_iters, index_root=index_root, target_mode=target_mode)
 
 if __name__ == "__main__":
     dataset = get_dataset(
-        root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
+        root="/localdata/tzhangbu/dataset/refcoco",
         augment_text_root="augmentation/data",
         dataset="unc+",
         split="train",
         max_tokens=20, 
-        eval_mode=True
+        eval_mode=True,
+        target_mode="soft"
     )
     length = len(dataset)
     print(f"Dataset length: {length}")
     
-    random_choices = np.random.choice(length, size=5, replace=False)
+    random_choices = np.random.choice(length, size=5000, replace=False)
     print(f"Randomly selected indices: {random_choices}")
     
     ## Print some sample of text and augmented text
-    
     for i in random_choices:
-        data_dict = dataset.get_raw_item(i)
-        print(f"Sample {i}:")
-        print(f"Text: {data_dict['txt']}")
-        print(f"Augmented Text: {data_dict['aug_txt']}")
+        sample = dataset[i]
+        print(f"Index: {i}")
+        print(f"Original Text: {sample['txt']}")
+        print(f"Augmented Text: {sample['aug_txt']}")
+        print(f"Image shape: {sample['img'].shape}")
+        print(f"Target shape: {sample['target'].shape}")
+
+        print(f"Raw image shape: {torch.unique(torch.tensor(sample['raw_img']))}")
+
+        print(sample["target"])
+        
+        print("-" * 50)
+    
+        
+    
     
     
 
