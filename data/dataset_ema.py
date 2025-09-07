@@ -145,9 +145,9 @@ class StudentTeacherDataset(AbstractDataset):
                 custom_T.RandomColorJitter(0.1, brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1),
                 custom_T.RandomGaussianBlur(0.5, kernel_size=11, sigma_min=0.1, sigma_max=2.0),
                 custom_T.RandomNoise(0.5, noise_level=0.2),
-                custom_T.RandomCrop(1.0, 360, 480),
+                custom_T.RandomCrop(0.0, 360, 480),
                 custom_T.Resize(480),
-                custom_T.RandomHorizontalFlip(0.5),
+                custom_T.RandomHorizontalFlip(0.0),
                 custom_T.RandomGrayScale(0.3),
                 custom_T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
                 custom_T.ToTensor()

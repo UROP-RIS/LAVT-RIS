@@ -4,7 +4,7 @@
             "module": "data.dataset_ema",
             "class_name": "StudentTeacherDataset",
             "args": {
-                "root": "/localdata/tzhangbu/dataset/refcoco",
+                "root": "/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
                 "dataset": "unc",
                 "split": "train",
                 "max_tokens": 20,

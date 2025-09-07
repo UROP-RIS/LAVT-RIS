@@ -120,6 +120,12 @@ def evaluate(model, data_loader, bert_model, writer=None, epoch=None):
         writer.add_scalar("val/overall_IoU", oIoU, epoch)
     return mIoU, oIoU
     
+def freeze_model(model, bert):
+    for param in model.parameters():
+        param.requires_grad = False
+    if bert is not None:
+        for param in bert.parameters():
+            param.requires_grad = False
 
 def train_one_epoch(model_t,
                     model_s, 
@@ -131,6 +137,7 @@ def train_one_epoch(model_t,
                     l_weights,
                     keep_rate,
                     optimizer, 
+                    loss_scaler,
                     data_loader, 
                     lr_scheduler, 
                     epoch, 
@@ -142,6 +149,7 @@ def train_one_epoch(model_t,
     model_s.train()
     bert_t.eval()
     bert_s.train()
+    freeze_model(model_t, bert_t)
     
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value}'))
@@ -150,7 +158,6 @@ def train_one_epoch(model_t,
     metric_logger.add_meter('distilled_loss', utils.SmoothedValue(window_size=20, fmt='{value:.4f}'))
     metric_logger.add_meter('loss', utils.SmoothedValue(window_size=20, fmt='{value:.4f}'))
     header = 'Epoch: [{}]'.format(epoch)
-    loss_scaler = NativeScalerWithGradNormCount()
     for i, data in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
         optimizer.zero_grad()
         
@@ -206,9 +213,9 @@ def train_one_epoch(model_t,
         
         ## Teacher label loss
         aligned_l_t = cross_align_features(
-            teacher_feat = out_t['out'], teacher_inv = inv_t, student_feat= out_s['out'], student_inv = inv_s, mode='bilinear', align_corners=True 
+            teacher_feat = out_t['out'].detach(), teacher_inv = inv_t, student_feat= out_s['out'], student_inv = inv_s, mode='bilinear', align_corners=True 
         )
-        target_loss = l2(aligned_l_t.detach(), out_s['out'])
+        target_loss = l2(aligned_l_t, out_s['out'])
         
         ## Distilled loss for tokens
         ## Only regularized the last layer first
@@ -222,11 +229,13 @@ def train_one_epoch(model_t,
         total_loss = label_loss * l_weights[0] + target_loss * l_weights[1] + distilled_loss * l_weights[2]
         
         ## Back propagation
-        loss_scaler(total_loss, optimizer=optimizer, clip_grad=5.0, parameters=model_s.parameters(), create_graph=False, update_grad=True)
+        all_params = list(model_s.parameters()) + list(bert_s.parameters())
+        loss_scaler(total_loss, optimizer=optimizer, clip_grad=10., parameters=all_params, create_graph=False, update_grad=True)
         lr_scheduler.step()
         
         ## EMA update
         update_teacher_model(student=model_s, teacher=model_t, keep_rate=keep_rate)
+        update_teacher_model(student=bert_s, teacher=bert_t, keep_rate=keep_rate)
         metric_logger.update(
             loss=total_loss.item(),
             label_loss=label_loss.item(),
@@ -283,7 +292,7 @@ def main(args):
         dataset, num_replicas=num_tasks, rank=global_rank, shuffle=True
     )
     test_sampler = torch.utils.data.SequentialSampler(dataset_test)
-
+    loss_scaler = NativeScalerWithGradNormCount()
     # DataLoader with custom collate_fn
     data_loader = torch.utils.data.DataLoader(
         dataset,
@@ -466,6 +475,7 @@ def main(args):
             l_weights=l_weights,
             keep_rate=keep_rate,
             optimizer=optimizer,
+            loss_scaler=loss_scaler,
             data_loader=data_loader,
             lr_scheduler=lr_scheduler,
             epoch=epoch,
@@ -477,7 +487,7 @@ def main(args):
 
         # 评估
         iou, overallIoU = evaluate(
-            model_t, data_loader_test, bert_s,
+            model_t, data_loader_test, bert_t,
             writer=writer, epoch=epoch
         )
         print(f'Epoch {epoch}: Average object IoU {iou:.2f}, Overall IoU {overallIoU:.2f}')

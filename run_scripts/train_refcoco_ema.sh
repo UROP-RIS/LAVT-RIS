@@ -1,7 +1,7 @@
 #!/bin/bash
 mkdir -p ./models/refcoco
 
-gpu="0,3"
+gpu="0,1,2,3"
 export CUDA_VISIBLE_DEVICES=$gpu
 np=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n' | wc -l)
 
@@ -24,5 +24,5 @@ torchrun \
     --img_size 480 \
     --pin_mem true \
     --ck_bert ./bert/models \
-    --resume output/refcoco_pseudo/refcoco_pseudo.pth \
+    --resume checkpoints/refcoco_psuedo_consistent.pth \
     2>&1 | tee ./models/refcoco/output
