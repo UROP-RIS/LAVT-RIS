@@ -76,5 +76,12 @@ class AbstractDataset(torch.utils.data.Dataset):
         img, target = self.image_transforms(img, target)
         return img, target
         
-    
+    def normalize_to_softmax(self, data: list):
+        tensor_data = torch.tensor([x if x is not None else float('nan') for x in data])
+        mask = ~torch.isnan(tensor_data)
+        valid = tensor_data[mask]
+        valid_softmax = torch.softmax(valid, dim=0)
+        result = torch.zeros_like(tensor_data)
+        result.masked_scatter_(mask, valid_softmax)
+        return result
     

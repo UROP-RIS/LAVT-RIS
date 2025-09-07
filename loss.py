@@ -20,7 +20,7 @@ class LabelCriterion(nn.Module):
         else:
             self.weight = None
 
-    def forward(self, input, target):
+    def forward(self, input, target, reduce="mean"):
         """
         input: (N, C, H, W) 或 (N, C)   -> logits
         target: (N, H, W) 或 (N,)       -> soft labels in [0.0, 1.0], float type
@@ -46,8 +46,10 @@ class LabelCriterion(nn.Module):
             class_weight = self.weight.view(1, 2, 1, 1)  # (1, 2, 1, 1)
             loss = loss * class_weight
 
-        # 平均损失
-        return loss.sum(dim=1).mean()  # 先对类别求和，再对 spatial 和 batch 求均值
+        if reduce == "mean":
+            return loss.sum(dim=1).mean()
+        else:
+            return loss.sum(dim=1)  # (N, H, W)
 
 class LabelDiceLoss(nn.Module):
     def __init__(self, smooth=1.0, reduction='mean'):

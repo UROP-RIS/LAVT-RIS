@@ -19,7 +19,13 @@ class _LAVTSimpleDecode(nn.Module):
         x = self.classifier(x_c4, x_c3, x_c2, x_c1)
         x = F.interpolate(x, size=input_shape, mode='bilinear', align_corners=True)
 
-        return x
+        return {
+            "out": x,
+            "x_c1": x_c1,
+            "x_c2": x_c2,
+            "x_c3": x_c3,
+            "x_c4": x_c4,
+        }
 
 
 class LAVT(_LAVTSimpleDecode):
