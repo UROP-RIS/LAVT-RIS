@@ -201,13 +201,17 @@ def train_one_epoch(model_t,
                 out_t = model_t(img_t, embedding_t, l_mask=l_mask_t)
         
         # Student
-        with torch.cuda.amp.autocast():
             last_hidden_states_s = bert_s(input_ids_s, attention_mask=attentions_s)[0]
             embedding_s = last_hidden_states_s.permute(0, 2, 1)
             l_mask_s = attentions_s.unsqueeze(-1)
             out_s = model_s(img_s, embedding_s, l_mask=l_mask_s)
             
         ## Supervised loss for labeled data
+        if stream_configs["label_supervision"] == "filtered":
+            threshold = stream_configs["label_supervision_threshold"]
+            valid_label_mask = (sup_loss_weight > threshold).float() # B,
+            sup_loss_weight = sup_loss_weight * valid_label_mask
+
         av_pixel_loss = l1(out_s['out'], label_s, reduce=None).mean(dim=(1,2))  # (B, H, W) -> (B,)
         label_loss = (av_pixel_loss * sup_loss_weight).mean(dim=0)
         
@@ -222,15 +226,29 @@ def train_one_epoch(model_t,
         x4_t = out_t['x_c4']
         x4_s = out_s['x_c4']
         
-        algined_x4_t = cross_align_features(
-            teacher_feat = x4_t, teacher_inv = inv_t, student_feat= x4_s, student_inv = inv_s, mode='bilinear', align_corners=True 
+        ## Apply another inverse matrix: inverse scalar of the pixel to the pixel map
+        scale_t = x4_t.shape[-1] / 480.0
+        scale_s = x4_s.shape[-1] / 480.0
+        scale_t_m = torch.tensor([[1.0 / scale_t, 0, 0], 
+                                  [0, 1.0 / scale_t, 0], 
+                                  [0, 0, 1]]).cuda().unsqueeze(0).repeat(x4_t.shape[0], 1, 1)
+        scale_s_m = torch.tensor([[1.0 / scale_s, 0, 0], 
+                                  [0, 1.0 / scale_s, 0], 
+                                  [0, 0, 1]]).cuda().unsqueeze(0).repeat(x4_s.shape[0], 1, 1)
+        
+        inv_t_x4 = torch.bmm(inv_t, scale_t_m)
+        inv_s_x4 = torch.bmm(inv_s, scale_s_m)
+        
+        aligned_x4_t = cross_align_features(
+            teacher_feat = x4_t, teacher_inv = inv_t_x4, student_feat= x4_s, student_inv = inv_s_x4, mode='bilinear', align_corners=True 
         )
-        distilled_loss = l3(algined_x4_t.detach(), x4_s)
+        # aligned_x4_t = x4_t  # 取消对 token 特征的对齐
+        distilled_loss = l3(aligned_x4_t.detach(), x4_s)
         total_loss = label_loss * l_weights[0] + target_loss * l_weights[1] + distilled_loss * l_weights[2]
         
         ## Back propagation
-        all_params = list(model_s.parameters()) + list(bert_s.parameters())
-        loss_scaler(total_loss, optimizer=optimizer, clip_grad=10., parameters=all_params, create_graph=False, update_grad=True)
+        # all_params = list(model_s.parameters()) + list(bert_s.parameters())
+        loss_scaler(total_loss, optimizer=optimizer, clip_grad=None, parameters=None, create_graph=False, update_grad=True)
         lr_scheduler.step()
         
         ## EMA update
@@ -453,7 +471,7 @@ def main(args):
     l2 = make_object_from_config(configs["train"]["l2"])  # target loss (teacher label)
     l3 = make_object_from_config(configs["train"]["l3"])  # token consistency loss
     l_weights = configs["train"]["loss_weights"]  # [w_label, w_target, w_distill]
-    keep_rate = configs["train"].get("ema_keep_rate", 0.996)  # EMA 更新率
+    keep_rate = configs["train"].get("ema_keep_rate", 0.9996)  # EMA 更新率
 
     # -------------------------------
     # 9. 开始训练

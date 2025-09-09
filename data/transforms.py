@@ -19,12 +19,18 @@ class RandomHorizontalFlip:
         if random.random() < self.p:
             out_dict['img'] = img[:, ::-1, ...]
             out_dict['mask'] = out_dict['mask'][:, ::-1, ...]
-
+            
             text = out_dict['text']
             text = re.sub(r'\bright\b', '###TEMP###', text)
             text = re.sub(r'\bleft\b', 'right', text)
             text = re.sub(r'###TEMP###', 'left', text)
             out_dict['text'] = text
+            
+            text = out_dict["aug_text"]
+            text = re.sub(r'\bright\b', '###TEMP###', text)
+            text = re.sub(r'\bleft\b', 'right', text)
+            text = re.sub(r'###TEMP###', 'left', text)
+            out_dict['aug_text'] = text
 
             inv_matrix = np.array([
                 [-1,  0, w - 1],
@@ -35,6 +41,89 @@ class RandomHorizontalFlip:
             inv_matrix = np.eye(3)
 
         return out_dict, inv_matrix
+
+class RandomMaskImage:
+    
+    def __init__(self, p=0.5, patch_size=16, mask_ratio=0.75):
+        self.p = p
+        self.patch_size = patch_size
+        self.mask_ratio = mask_ratio
+    
+    def __call__(self, input_dict):
+        out_dict = copy.deepcopy(input_dict)
+        img = out_dict['img']  # 假设 img 是 H x W x C 的 numpy 数组，且 H, W 可被 patch_size 整除
+
+        # 随机决定是否应用 mask
+        if random.random() > self.p:
+            inverse_matrix = np.eye(3, dtype=np.float32)
+            return out_dict, inverse_matrix
+
+        h, w = img.shape[:2]
+        ph = pw = self.patch_size
+
+        # 断言：图像尺寸必须能被 patch_size 整除
+        assert h % ph == 0, f"Image height {h} is not divisible by patch_size {ph}"
+        assert w % pw == 0, f"Image width {w} is not divisible by patch_size {pw}"
+
+        gh, gw = h // ph, w // pw  # 网格数量
+        num_patches = gh * gw
+        num_masked = int(num_patches * self.mask_ratio)
+        indices = np.random.permutation(num_patches)
+        masked_indices = indices[:num_masked]
+        mask = np.zeros((gh, gw), dtype=bool)
+        mask.flat[masked_indices] = True
+        img_masked = img.copy()
+        for i in range(gh):
+            for j in range(gw):
+                if mask[i, j]:
+                    start_h, end_h = i * ph, (i + 1) * ph
+                    start_w, end_w = j * pw, (j + 1) * pw
+                    img_masked[start_h:end_h, start_w:end_w, :] = 0  # 或使用均值等填充
+
+        out_dict['img'] = img_masked
+        out_dict['mask'] = mask                    # 可用于重建
+        out_dict['masked_indices'] = masked_indices
+        out_dict['unmask_indices'] = np.logical_not(mask).flat.nonzero()[0]
+        inverse_matrix = np.eye(3, dtype=np.float32)
+
+        return out_dict, inverse_matrix
+
+class RandomMaskText:
+    
+    def __init__(self, p=0.5, mask_ratio=0.15, mask_token='[MASK]'):
+        self.p = p
+        self.mask_token = mask_token
+        self.mask_ratio = mask_ratio
+
+    def __call__(self, input_dict):
+        out_dict = copy.deepcopy(input_dict)
+        text = out_dict['text']
+
+        if random.random() > self.p:
+            inverse_matrix = np.eye(3, dtype=np.float32)
+            return out_dict, inverse_matrix
+
+        words = re.findall(r'\S+', text)
+        if len(words) <= 1:
+            inverse_matrix = np.eye(3, dtype=np.float32)
+            return out_dict, inverse_matrix
+
+        num_words = len(words)
+        num_masked = int(num_words * self.mask_ratio)
+        num_masked = max(1, min(num_masked, num_words))  
+        indices = np.random.choice(num_words, num_masked, replace=False)
+
+        masked_words = words.copy()
+        for idx in indices:
+            masked_words[idx] = self.mask_token
+            
+        masked_text = ' '.join(masked_words)
+        masked_text = re.sub(r'(?:\s*\[MASK\]\s*)+', f' {self.mask_token} ', masked_text)
+        masked_text = re.sub(r'\s+', ' ', masked_text).strip()
+        out_dict['text'] = masked_text
+        inverse_matrix = np.eye(3, dtype=np.float32)
+
+        return out_dict, inverse_matrix
 
 class Resize:
     def __init__(self, size):

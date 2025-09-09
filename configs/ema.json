@@ -39,7 +39,9 @@
         "stream_configs": {
             "enable_image_masking": true,
             "image_mask_ratio": 0.75,
-            "image_mask_patch_size": 16
+            "image_mask_patch_size": 16,
+            "label_supervision": "filtered",
+            "label_supervision_threshold": 0.95
         }
     },
     "val": {

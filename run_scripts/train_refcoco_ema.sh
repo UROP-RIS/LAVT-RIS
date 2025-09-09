@@ -14,7 +14,7 @@ torchrun \
     --model_id refcoco \
     --pseudo_dataset unc \
     --batch-size 12 \
-    --lr 0.0002 \
+    --lr 0.00005 \
     --workers 12 \
     --wd 1e-2 \
     --swin_type base \
@@ -24,5 +24,5 @@ torchrun \
     --img_size 480 \
     --pin_mem true \
     --ck_bert ./bert/models \
-    --resume checkpoints/refcoco_psuedo_consistent.pth \
-    2>&1 | tee ./models/refcoco/output
+    --resume checkpoints/refcoco_pseudo.pth \
+    2>&1 | tee ./models/refcoco/output.log

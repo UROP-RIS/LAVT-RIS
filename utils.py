@@ -247,10 +247,12 @@ class NativeScalerWithGradNormCount:
     def __call__(self, loss, optimizer, clip_grad=None, parameters=None, create_graph=False, update_grad=True):
         self._scaler.scale(loss).backward(create_graph=create_graph)
         if update_grad:
+            if parameters is None:
+                parameters = self.get_optimizer_params(optimizer)
             if clip_grad is not None:
-                assert parameters is not None
+
                 self._scaler.unscale_(optimizer)  # unscale the gradients of optimizer's assigned params in-place
-                norm = torch.nn.utils.clip_grad_norm_(parameters, clip_grad)
+                norm = torch.nn.utils.clip_grad_norm_(parameters, max_norm=clip_grad)
             else:
                 self._scaler.unscale_(optimizer)
                 norm = ampscaler_get_grad_norm(parameters)
@@ -265,3 +267,9 @@ class NativeScalerWithGradNormCount:
 
     def load_state_dict(self, state_dict):
         self._scaler.load_state_dict(state_dict)
+    
+    def get_optimizer_params(self, optimizer):
+        all_params = []
+        for group in optimizer.param_groups:
+            all_params.extend(group["params"])
+        return all_params

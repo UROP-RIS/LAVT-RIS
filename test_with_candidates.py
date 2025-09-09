@@ -102,9 +102,9 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, output_dir
                 last_hidden_states = bert_model(sentences, attention_mask=attentions)[0]
                 embedding = last_hidden_states.permute(0, 2, 1)
                 l_mask = attentions.unsqueeze(-1)
-                output = model(images, embedding, l_mask=l_mask)
+                output = model(images, embedding, l_mask=l_mask)["out"]
             else:
-                output = model(images, sentences.squeeze(1), l_mask=attentions.squeeze(1))
+                output = model(images, sentences.squeeze(1), l_mask=attentions.squeeze(1))["out"]
 
             # 获取预测分数
             pred_scores = F.softmax(output, dim=1)[:, 1].cpu().numpy()  # (B, H_t, W_t)
@@ -361,14 +361,14 @@ def main(args):
     # 模型加载（保持不变）
     single_model = segmentation.__dict__[args.model](pretrained='', args=args)
     checkpoint = torch.load(stream_configs["resume"], map_location='cpu', weights_only=False)
-    single_model.load_state_dict(checkpoint['model'])
+    single_model.load_state_dict(checkpoint[stream_configs.get("load_model_key", "model")])
     model = single_model.to(device)
     
     if args.model != 'lavt_one':
         bert_model = BertModel.from_pretrained(stream_configs["ck_bert"])
         if args.ddp_trained_weights:
             bert_model.pooler = None
-        bert_model.load_state_dict(checkpoint['bert_model'])
+        bert_model.load_state_dict(checkpoint[stream_configs.get("load_bert_key", "bert_model")])
         bert_model = bert_model.to(device)
     else:
         bert_model = None
