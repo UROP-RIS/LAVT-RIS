@@ -14,6 +14,7 @@ import transforms as T
 import utils
 import numpy as np
 import json
+from utils import PartialDistributedSampler
 from misc.common import make_object_from_config
 from misc.workspace import create_workspace, save_configs_and_args
 from torch.utils.tensorboard import SummaryWriter
@@ -306,8 +307,11 @@ def main(args):
     global_rank = utils.get_rank()
 
     # DistributedSampler
-    train_sampler = torch.utils.data.distributed.DistributedSampler(
-        dataset, num_replicas=num_tasks, rank=global_rank, shuffle=True
+    # train_sampler = torch.utils.data.distributed.DistributedSampler(
+    #     dataset, num_replicas=num_tasks, rank=global_rank, shuffle=True
+    # )
+    train_sampler = PartialDistributedSampler(
+        dataset, num_replicas=num_tasks, rank=global_rank, shuffle=True, fraction=configs["train"]["stream_configs"].get("data_fraction_epoch", 0.5)
     )
     test_sampler = torch.utils.data.SequentialSampler(dataset_test)
     loss_scaler = NativeScalerWithGradNormCount()
@@ -320,7 +324,7 @@ def main(args):
         pin_memory=args.pin_mem,
         drop_last=True,
         persistent_workers=True,
-        collate_fn=dataset.collate_fn  # ✅ 使用 dataset 的 staticmethod collate_fn
+        collate_fn=make_object_from_config(configs["train"]["collate_fn"]) # ✅ 使用 dataset 的 staticmethod collate_fn
     )
     data_loader_test = torch.utils.data.DataLoader(
         dataset_test,

@@ -1,17 +1,50 @@
 {
     "train": {
         "dataset": {
-            "module": "data.dataset_ema",
-            "class_name": "StudentTeacherDataset",
+            "module": "torch.utils.data",
+            "class_name": "ConcatDataset",
             "args": {
-                "root": "/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
-                "dataset": "unc+",
-                "split": "train",
-                "max_tokens": 20,
-                "max_iters": null,
-                "teacher_transforms": null,
-                "student_transforms": null
+                "datasets": [
+                    {
+                        "module": "data.dataset_ema",
+                        "class_name": "StudentTeacherDataset",
+                        "args": {
+                            "root": "/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
+                            "augmented_text_root": "augmentation/data",
+                            "dataset": "unc+",
+                            "split": "train",
+                            "max_tokens": 20,
+                            "index_suffix": "consistent",
+                            "max_iters": null,
+                            "teacher_transforms": null,
+                            "student_transforms": null,
+                            "use_aug_text_prob": 0.75
+                        }
+                    },
+                    {
+                        "module": "data.dataset_ema",
+                        "class_name": "StudentTeacherDataset",
+                        "args": {
+                            "root": "/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
+                            "augmented_text_root": "augmentation/data",
+                            "dataset": "unc",
+                            "split": "train",
+                            "max_tokens": 20,
+                            "index_suffix": "consistent",
+                            "max_iters": null,
+                            "teacher_transforms": null,
+                            "student_transforms": null,
+                            "use_aug_text_prob": 0.75
+                        }
+                    }
+                ]
             }
+        },
+
+        "collate_fn": {
+            "module": "data.dataset_ema",
+            "class_name": "make_collate_fn",
+            "args": {}
         },
         "l1": {
             "module": "loss",
@@ -37,11 +70,9 @@
         "loss_weights": [1.0, 0.5, 0.05],
         "ema_keep_rate": 0.9996,
         "stream_configs": {
-            "enable_image_masking": true,
-            "image_mask_ratio": 0.75,
-            "image_mask_patch_size": 16,
+            "data_fraction_epoch": 0.5,
             "label_supervision": "filtered",
-            "label_supervision_threshold": 0.95
+            "label_supervision_threshold": 0.90
         }
     },
     "val": {

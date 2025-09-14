@@ -273,3 +273,20 @@ class NativeScalerWithGradNormCount:
         for group in optimizer.param_groups:
             all_params.extend(group["params"])
         return all_params
+
+class PartialDistributedSampler(torch.utils.data.distributed.DistributedSampler):
+    def __init__(self, dataset, num_replicas=None, rank=None, shuffle=True, seed=0, fraction=0.5):
+        super().__init__(dataset, num_replicas=num_replicas, rank=rank, shuffle=shuffle, seed=seed)
+        self.fraction = fraction
+
+    def __iter__(self):
+        indices = list(super().__iter__())
+        num_to_keep = int(len(indices) * self.fraction)
+        g = torch.Generator()
+        g.manual_seed(self.seed + self.epoch)
+        perm = torch.randperm(len(indices), generator=g).tolist()
+        selected_indices = [indices[i] for i in perm[:num_to_keep]]
+        return iter(selected_indices)
+
+    def __len__(self):
+        return int(super().__len__() * self.fraction)

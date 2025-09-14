@@ -10,7 +10,7 @@ from PIL import Image
 
 
 class AbstractDataset(torch.utils.data.Dataset):
-    def __init__(self, root: str, dataset: str, split: str, max_tokens=20, image_transforms=None):
+    def __init__(self, root: str, dataset: str, split: str, max_tokens=20, index_suffix: str | None = None, image_transforms=None):
         self.root = root
         self.dataset = dataset
         self.split = split
@@ -24,6 +24,10 @@ class AbstractDataset(torch.utils.data.Dataset):
             self.image_transforms = T.Compose(transforms)
 
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+        if index_suffix is None:
+            self.index_root = f"{self.root}/{self.dataset}/{self.split}_pseudo_score"
+        else:
+            self.index_root = f"{self.root}/{self.dataset}/{self.split}_pseudo_score_{index_suffix}"
         self.index_root = f"{self.root}/{self.dataset}/{self.split}_pseudo_score"
         self.image_txt_gt_root = f"{self.root}/{self.dataset}/{self.split}_batch"
         self.mask_root = f"{self.root}/{self.dataset}/{self.split}_mask_newB_batch"

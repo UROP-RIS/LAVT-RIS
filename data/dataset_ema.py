@@ -1,5 +1,6 @@
 from data.common import AbstractDataset
 from torch.utils.data._utils.collate import default_collate
+from misc.mask import postprocess_binary_mask, fill_holes_in_components
 import torch
 import data.transforms as custom_T
 import numpy as np
@@ -7,6 +8,7 @@ import os
 import json
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
+
 
 def denormalize(tensor, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
     """
@@ -171,6 +173,7 @@ class StudentTeacherDataset(AbstractDataset):
                  dataset: str = "unc",
                  split = "train", 
                  max_tokens=20,
+                 index_suffix: str | None = None,
                  max_iters = None,
                  teacher_transforms=None,
                  student_transforms=None,
@@ -202,6 +205,11 @@ class StudentTeacherDataset(AbstractDataset):
         img, mask_array, txt, similarity_scores, predicted_mask_id = self.load_from_index(index_path)
         normalized_scores = self.normalize_to_softmax(similarity_scores)
         target_loss_weight = normalized_scores[predicted_mask_id]
+        
+        ## Post process mask array
+        mask_array = postprocess_binary_mask(mask_array, max_hole_area=100, max_sprinkle_area=100)
+        mask_array = fill_holes_in_components(mask_array)
+        mask_array = mask_array.astype(np.uint8) 
         
         # Augmented text
         data_id = self.extract_number(os.path.basename(index_path))
@@ -284,15 +292,20 @@ class StudentTeacherDataset(AbstractDataset):
         collated["orig_img"] = orig_imgs  # list of np.ndarray
         return collated
     
+    
+def make_collate_fn():
+    return lambda batch: StudentTeacherDataset.collate_fn(batch)
+
 
 if __name__ == "__main__":
     dataset = StudentTeacherDataset(
-        # root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
-        root="/localdata/tzhangbu/dataset/refcoco",
+        root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
+        # root="/localdata/tzhangbu/dataset/refcoco",
         augmented_text_root="augmentation/data",
         dataset="unc",
         split="train",
-        max_iters=None
+        max_iters=None,
+        use_aug_text_prob=0.75
     )
     
     dataloader = torch.utils.data.DataLoader(
@@ -304,124 +317,124 @@ if __name__ == "__main__":
         pin_memory=True
     )
     
-    # import tqdm
+    import tqdm
     
-    # for batch in tqdm.tqdm(dataloader):
-    #     pass
+    for batch in tqdm.tqdm(dataloader):
+        pass
         
 
-    for i in range(len(dataset)):
-        sample = dataset[i]
+    # for i in range(len(dataset)):
+    #     sample = dataset[i]
         
-        print(f"Augmented text (Student): {sample['student']['text']}")
-        print(f"Original text (Teacher): {sample['teacher']['text']}")
+    #     print(f"Augmented text (Student): {sample['student']['text']}")
+    #     print(f"Original text (Teacher): {sample['teacher']['text']}")
 
-        orig_img = sample["orig_img"]           # numpy array (HWC)
-        teacher_img = sample["teacher"]["image"].cpu().numpy()  # (3, H, W)
-        student_img = sample["student"]["image"].cpu().numpy()  # (3, H, W)
-        teacher_inv = sample["teacher"]["inv"].cpu().numpy()    # (3,3)
-        student_inv = sample["student"]["inv"].cpu().numpy()    # (3,3)
+    #     orig_img = sample["orig_img"]           # numpy array (HWC)
+    #     teacher_img = sample["teacher"]["image"].cpu().numpy()  # (3, H, W)
+    #     student_img = sample["student"]["image"].cpu().numpy()  # (3, H, W)
+    #     teacher_inv = sample["teacher"]["inv"].cpu().numpy()    # (3,3)
+    #     student_inv = sample["student"]["inv"].cpu().numpy()    # (3,3)
         
-        scale = 1/2
+    #     scale = 1/2
         
-        ## Experiment: Downsample student_img
-        teacher_img = F.interpolate(torch.from_numpy(teacher_img).unsqueeze(0), scale_factor=scale, mode='bilinear', align_corners=False).squeeze(0).numpy()
-        student_img = F.interpolate(torch.from_numpy(student_img).unsqueeze(0), scale_factor=scale, mode='bilinear', align_corners=False).squeeze(0).numpy()
-        
-
-        teacher_inv = teacher_inv @ np.array(
-            [
-                [1/scale, 0, 0],
-                [0, 1/scale, 0],
-                [0, 0, 1]
-            ]
-        )
-        
-        student_inv = student_inv @ np.array(
-            [
-                [1/scale, 0, 0],
-                [0, 1/scale, 0],
-                [0, 0, 1]
-            ]
-        )
-        
+    #     ## Experiment: Downsample student_img
+    #     teacher_img = F.interpolate(torch.from_numpy(teacher_img).unsqueeze(0), scale_factor=scale, mode='bilinear', align_corners=False).squeeze(0).numpy()
+    #     student_img = F.interpolate(torch.from_numpy(student_img).unsqueeze(0), scale_factor=scale, mode='bilinear', align_corners=False).squeeze(0).numpy()
         
 
-        print(f"\n--- Sample {i} ---")
-        print("Teacher inv matrix:\n", teacher_inv)
-        print(f"Original shape: {orig_img.shape}")
+    #     teacher_inv = teacher_inv @ np.array(
+    #         [
+    #             [1/scale, 0, 0],
+    #             [0, 1/scale, 0],
+    #             [0, 0, 1]
+    #         ]
+    #     )
+        
+    #     student_inv = student_inv @ np.array(
+    #         [
+    #             [1/scale, 0, 0],
+    #             [0, 1/scale, 0],
+    #             [0, 0, 1]
+    #         ]
+    #     )
+        
+        
 
-        # 🔹 验证 teacher_inv
-        print("1. Validating teacher_inv")
-        rec_t, mask_t, met_t = validate_inverse_matrix(
-            teacher_img,      # numpy CHW
-            teacher_inv,
-            orig_img,         # numpy HWC or CHW → 自动处理
-            device='cpu'
-        )
-        print(f"   Masked MSE: {met_t['masked_mse']:.4f}, PSNR: {met_t['psnr']:.2f} dB, Valid Ratio: {met_t['valid_ratio']:.2f}")
+    #     print(f"\n--- Sample {i} ---")
+    #     print("Teacher inv matrix:\n", teacher_inv)
+    #     print(f"Original shape: {orig_img.shape}")
 
-        # 🔹 验证 student_inv
-        print("2. Validating student_inv")
-        rec_s, mask_s, met_s = validate_inverse_matrix(
-            student_img,
-            # student_inv,
-            np.eye(3),  # 先测试 identity
-            orig_img,
-            device='cpu'
-        )
-        print(f"   Masked MSE: {met_s['masked_mse']:.4f}, PSNR: {met_s['psnr']:.2f} dB, Valid Ratio: {met_s['valid_ratio']:.2f}")
+    #     # 🔹 验证 teacher_inv
+    #     print("1. Validating teacher_inv")
+    #     rec_t, mask_t, met_t = validate_inverse_matrix(
+    #         teacher_img,      # numpy CHW
+    #         teacher_inv,
+    #         orig_img,         # numpy HWC or CHW → 自动处理
+    #         device='cpu'
+    #     )
+    #     print(f"   Masked MSE: {met_t['masked_mse']:.4f}, PSNR: {met_t['psnr']:.2f} dB, Valid Ratio: {met_t['valid_ratio']:.2f}")
 
-        # 🔹 可视化（纯 numpy）
-        rec_t_img = rec_t.numpy()  # (3, H, W)
-        rec_s_img = rec_s.numpy()
-        orig_img_chw = orig_img if orig_img.shape[0] == 3 else np.transpose(orig_img, (2, 0, 1))
-        orig_img_chw = orig_img_chw.astype(np.float32)
+    #     # 🔹 验证 student_inv
+    #     print("2. Validating student_inv")
+    #     rec_s, mask_s, met_s = validate_inverse_matrix(
+    #         student_img,
+    #         # student_inv,
+    #         np.eye(3),  # 先测试 identity
+    #         orig_img,
+    #         device='cpu'
+    #     )
+    #     print(f"   Masked MSE: {met_s['masked_mse']:.4f}, PSNR: {met_s['psnr']:.2f} dB, Valid Ratio: {met_s['valid_ratio']:.2f}")
 
-        # 反归一化 reconstructed（因为它们是模型输出，可能是归一化后的）
-        # 这里我们假设 rec_t 和 rec_s 是归一化后的，所以反归一化
-        mean = np.array([0.485, 0.456, 0.406]).reshape(3, 1, 1)
-        std = np.array([0.229, 0.224, 0.225]).reshape(3, 1, 1)
-        rec_t_denorm = np.clip((rec_t_img * std + mean) * 255, 0, 255).astype(np.uint8)
-        rec_s_denorm = np.clip((rec_s_img * std + mean) * 255, 0, 255).astype(np.uint8)
-        orig_uint8 = np.clip(orig_img_chw * 255, 0, 255).astype(np.uint8) if orig_img_chw.max() <= 1 \
-                     else orig_img_chw.astype(np.uint8)
+    #     # 🔹 可视化（纯 numpy）
+    #     rec_t_img = rec_t.numpy()  # (3, H, W)
+    #     rec_s_img = rec_s.numpy()
+    #     orig_img_chw = orig_img if orig_img.shape[0] == 3 else np.transpose(orig_img, (2, 0, 1))
+    #     orig_img_chw = orig_img_chw.astype(np.float32)
 
-        # 转为 HWC 显示
-        rec_t_hwc = np.transpose(rec_t_denorm, (1, 2, 0))
-        rec_s_hwc = np.transpose(rec_s_denorm, (1, 2, 0))
-        orig_hwc = np.transpose(orig_uint8, (1, 2, 0))
+    #     # 反归一化 reconstructed（因为它们是模型输出，可能是归一化后的）
+    #     # 这里我们假设 rec_t 和 rec_s 是归一化后的，所以反归一化
+    #     mean = np.array([0.485, 0.456, 0.406]).reshape(3, 1, 1)
+    #     std = np.array([0.229, 0.224, 0.225]).reshape(3, 1, 1)
+    #     rec_t_denorm = np.clip((rec_t_img * std + mean) * 255, 0, 255).astype(np.uint8)
+    #     rec_s_denorm = np.clip((rec_s_img * std + mean) * 255, 0, 255).astype(np.uint8)
+    #     orig_uint8 = np.clip(orig_img_chw * 255, 0, 255).astype(np.uint8) if orig_img_chw.max() <= 1 \
+    #                  else orig_img_chw.astype(np.uint8)
 
-        # 差值图
-        diff_t = np.abs(rec_t_hwc.astype(np.int32) - orig_hwc.astype(np.int32)).astype(np.uint8)
-        diff_s = np.abs(rec_s_hwc.astype(np.int32) - orig_hwc.astype(np.int32)).astype(np.uint8)
-        mask_s_np = mask_s.numpy()
-        diff_s_masked = diff_s * np.stack([mask_s_np]*3, axis=-1)
+    #     # 转为 HWC 显示
+    #     rec_t_hwc = np.transpose(rec_t_denorm, (1, 2, 0))
+    #     rec_s_hwc = np.transpose(rec_s_denorm, (1, 2, 0))
+    #     orig_hwc = np.transpose(orig_uint8, (1, 2, 0))
 
-        # 绘图
-        fig, axes = plt.subplots(2, 4, figsize=(16, 8))
-        axes[0,0].imshow(rec_t_hwc)
-        axes[0,0].set_title("Reconstructed (Teacher)")
-        axes[0,1].imshow(rec_s_hwc)
-        axes[0,1].set_title("Reconstructed (Student)")
-        axes[0,2].imshow(orig_hwc)
-        axes[0,2].set_title("Original (Ground Truth)")
-        axes[0,3].imshow(mask_s_np, cmap='gray')
-        axes[0,3].set_title("Valid Mask (Student)")
+    #     # 差值图
+    #     diff_t = np.abs(rec_t_hwc.astype(np.int32) - orig_hwc.astype(np.int32)).astype(np.uint8)
+    #     diff_s = np.abs(rec_s_hwc.astype(np.int32) - orig_hwc.astype(np.int32)).astype(np.uint8)
+    #     mask_s_np = mask_s.numpy()
+    #     diff_s_masked = diff_s * np.stack([mask_s_np]*3, axis=-1)
 
-        axes[1,0].imshow(diff_t)
-        axes[1,0].set_title("Diff (Teacher)")
-        axes[1,1].imshow(diff_s)
-        axes[1,1].set_title("Diff (Student)")
-        axes[1,2].imshow(diff_s_masked)
-        axes[1,2].set_title("Diff (Student, Masked)")
-        axes[1,3].axis('off')
+    #     # 绘图
+    #     fig, axes = plt.subplots(2, 4, figsize=(16, 8))
+    #     axes[0,0].imshow(rec_t_hwc)
+    #     axes[0,0].set_title("Reconstructed (Teacher)")
+    #     axes[0,1].imshow(rec_s_hwc)
+    #     axes[0,1].set_title("Reconstructed (Student)")
+    #     axes[0,2].imshow(orig_hwc)
+    #     axes[0,2].set_title("Original (Ground Truth)")
+    #     axes[0,3].imshow(mask_s_np, cmap='gray')
+    #     axes[0,3].set_title("Valid Mask (Student)")
 
-        for ax in axes.flat:
-            ax.axis('off')
-        plt.tight_layout()
-        plt.savefig(f"validation_sample_{i}.png")
-        plt.close()
+    #     axes[1,0].imshow(diff_t)
+    #     axes[1,0].set_title("Diff (Teacher)")
+    #     axes[1,1].imshow(diff_s)
+    #     axes[1,1].set_title("Diff (Student)")
+    #     axes[1,2].imshow(diff_s_masked)
+    #     axes[1,2].set_title("Diff (Student, Masked)")
+    #     axes[1,3].axis('off')
+
+    #     for ax in axes.flat:
+    #         ax.axis('off')
+    #     plt.tight_layout()
+    #     plt.savefig(f"validation_sample_{i}.png")
+    #     plt.close()
     
     # from torch.utils.data import DataLoader
     # dataloader = DataLoader(

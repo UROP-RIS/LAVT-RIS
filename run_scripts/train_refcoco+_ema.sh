@@ -1,7 +1,7 @@
 #!/bin/bash
 mkdir -p ./models/refcoco+
 
-gpu="4,5,6,7"
+gpu="3,4,5,6"
 export CUDA_VISIBLE_DEVICES=$gpu
 np=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n' | wc -l)
 
