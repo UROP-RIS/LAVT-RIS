@@ -4,9 +4,10 @@ python test_with_candidates.py \
     --dataset Gref \
     --split val  \
     --resume ./checkpoints/gref_corrections.pth \
+    --configs ./configs/val/config_gref.json \
     --workers 4 \
     --ddp_trained_weights \
     --window12 \
     --img_size 480 \
     --ck_bert ./bert/models \
-    --device cuda:3
+    --device cuda:0

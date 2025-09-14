@@ -1,0 +1,57 @@
+{
+    "train": {
+        "dataset": {
+            "module": "data.dataset_ema",
+            "class_name": "StudentTeacherDataset",
+            "args": {
+                "root": "/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
+                "dataset": "Gref",
+                "split": "train",
+                "max_tokens": 20,
+                "max_iters": null,
+                "teacher_transforms": null,
+                "student_transforms": null
+            }
+        },
+        "l1": {
+            "module": "loss",
+            "class_name": "LabelCriterion",
+            "args": {
+                "weight": [0.9, 1.1]
+            }
+        },
+        "l2": {
+            "module": "loss",
+            "class_name": "ConsistentDiceLoss",
+            "args": {
+                "smooth": 0.000001
+            }
+        },
+        "l3": {
+            "module": "torch.nn",
+            "class_name": "MSELoss",
+            "args": {
+                "reduction": "mean"
+            }
+        },
+        "loss_weights": [1.0, 0.5, 0.05],
+        "ema_keep_rate": 0.9996,
+        "stream_configs": {
+            "enable_image_masking": true,
+            "image_mask_ratio": 0.75,
+            "image_mask_patch_size": 16,
+            "label_supervision": "filtered",
+            "label_supervision_threshold": 0.95
+        }
+    },
+    "val": {
+        "dataset": {
+            "module": "data.dataset_refer_bert",
+            "class_name": "get_dataset",
+            "args": {
+                "image_set": "val",
+                "dataset": "refcoco"
+            }
+        }
+    }
+}
