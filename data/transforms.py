@@ -21,16 +21,14 @@ class RandomHorizontalFlip:
             out_dict['mask'] = out_dict['mask'][:, ::-1, ...]
             
             text = out_dict['text']
-            text = re.sub(r'\bright\b', '###TEMP###', text)
-            text = re.sub(r'\bleft\b', 'right', text)
-            text = re.sub(r'###TEMP###', 'left', text)
-            out_dict['text'] = text
             
-            text = out_dict["aug_text"]
-            text = re.sub(r'\bright\b', '###TEMP###', text)
-            text = re.sub(r'\bleft\b', 'right', text)
-            text = re.sub(r'###TEMP###', 'left', text)
-            out_dict['aug_text'] = text
+            try:
+                flipped_text = re.sub(r'\bright\b', '###TEMP###', text)
+                flipped_text = re.sub(r'\bleft\b', 'right', flipped_text)
+                flipped_text = re.sub(r'###TEMP###', 'left', flipped_text)
+                out_dict['text'] = flipped_text
+            except Exception as e:
+                print(f"Text flipping error: {e}")
 
             inv_matrix = np.array([
                 [-1,  0, w - 1],

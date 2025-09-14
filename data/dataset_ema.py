@@ -174,6 +174,7 @@ class StudentTeacherDataset(AbstractDataset):
                  max_iters = None,
                  teacher_transforms=None,
                  student_transforms=None,
+                 use_aug_text_prob=0.75,
                  ):
         super().__init__(
             root=root, 
@@ -182,7 +183,7 @@ class StudentTeacherDataset(AbstractDataset):
             max_tokens=max_tokens, 
             image_transforms=None
         )
-        self.augmented_text_root = augmented_text_root
+        self.augmented_dataset_text_root = os.path.join(augmented_text_root, dataset, split)
         self.max_iters = max_iters
         self.teacher_transforms = teacher_transforms if teacher_transforms is not None else self.get_default_teacher_transforms()
         self.student_transforms = student_transforms if student_transforms is not None else self.get_default_student_transforms()
@@ -190,6 +191,8 @@ class StudentTeacherDataset(AbstractDataset):
         self.index_files = sorted(os.listdir(self.index_root), key=self.extract_number)
         if self.max_iters is not None:
             self.index_files = self.index_files[:self.max_iters]
+        
+        self.use_aug_text_prob = use_aug_text_prob
     
     def __len__(self):
         return len(self.index_files)
@@ -202,7 +205,7 @@ class StudentTeacherDataset(AbstractDataset):
         
         # Augmented text
         data_id = self.extract_number(os.path.basename(index_path))
-        augment_text_path = os.path.join(self.augmented_text_root, f"{self.dataset}_{self.split}_augtext_{data_id}.json")
+        augment_text_path = os.path.join(self.augmented_dataset_text_root, f"{self.dataset}_{self.split}_augtext_{data_id}.json")
         if os.path.exists(augment_text_path):
             aug_data = json.load(open(augment_text_path, 'r'))
             aug_text_keys = list(aug_data.keys())[1:]
@@ -214,28 +217,33 @@ class StudentTeacherDataset(AbstractDataset):
         else:
             aug_txt = txt
         
+        
         input_teacher = {
             "img": img,
             "mask": mask_array,
             "text": txt,
-            "aug_text": aug_txt
         }
         
         input_student = {
             "img": img,
             "mask": mask_array,
             "text": txt,
-            "aug_text": aug_txt
         }
+
+        if np.random.rand() < self.use_aug_text_prob:
+            input_student["text"] = aug_txt
         
         input_teacher, inv_teacher = self.teacher_transforms(input_teacher)
         input_student, inv_student = self.student_transforms(input_student)  
         
         teacher_input_ids, teacher_attention_mask = self.tokenize_text(input_teacher["text"])
-        student_input_ids, student_attention_mask = self.tokenize_text(input_student["text"])
+        student_input_ids, student_attention_mask = self.tokenize_text(input_teacher["text"])
+        
+        try:
+            student_input_ids, student_attention_mask = self.tokenize_text(input_student["text"])
+        except Exception as e:
+            print(f"Tokenization error for text: {input_student['text']}. Using teacher text instead.")
     
-        teacher_aug_input_ids, teacher_aug_attention_mask = self.tokenize_text(input_teacher["aug_text"])
-        student_aug_input_ids, student_aug_attention_mask = self.tokenize_text(input_student["aug_text"])
         
         return {
             "teacher": {
@@ -244,8 +252,6 @@ class StudentTeacherDataset(AbstractDataset):
                 "text": input_teacher["text"],
                 "input_ids": teacher_input_ids,
                 "attention_mask": teacher_attention_mask,
-                "aug_input_ids": teacher_aug_input_ids,
-                "aug_attention_mask": teacher_aug_attention_mask,
                 "inv": torch.from_numpy(inv_teacher).float()
             },
             "student": {
@@ -254,8 +260,6 @@ class StudentTeacherDataset(AbstractDataset):
                 "text": input_student["text"],
                 "input_ids": student_input_ids,
                 "attention_mask": student_attention_mask,
-                "aug_input_ids": student_aug_input_ids,
-                "aug_attention_mask": student_aug_attention_mask,
                 "inv": torch.from_numpy(inv_student).float()
             },
             "orig_img": img,
@@ -283,14 +287,34 @@ class StudentTeacherDataset(AbstractDataset):
 
 if __name__ == "__main__":
     dataset = StudentTeacherDataset(
-        root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
+        # root="/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
+        root="/localdata/tzhangbu/dataset/refcoco",
+        augmented_text_root="augmentation/data",
         dataset="unc",
         split="train",
-        max_iters=50
+        max_iters=None
     )
+    
+    dataloader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=4,
+        shuffle=False,
+        num_workers=12,
+        collate_fn=StudentTeacherDataset.collate_fn,
+        pin_memory=True
+    )
+    
+    # import tqdm
+    
+    # for batch in tqdm.tqdm(dataloader):
+    #     pass
+        
 
     for i in range(len(dataset)):
         sample = dataset[i]
+        
+        print(f"Augmented text (Student): {sample['student']['text']}")
+        print(f"Original text (Teacher): {sample['teacher']['text']}")
 
         orig_img = sample["orig_img"]           # numpy array (HWC)
         teacher_img = sample["teacher"]["image"].cpu().numpy()  # (3, H, W)
@@ -341,7 +365,8 @@ if __name__ == "__main__":
         print("2. Validating student_inv")
         rec_s, mask_s, met_s = validate_inverse_matrix(
             student_img,
-            student_inv,
+            # student_inv,
+            np.eye(3),  # 先测试 identity
             orig_img,
             device='cpu'
         )

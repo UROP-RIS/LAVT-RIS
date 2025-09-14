@@ -4,13 +4,15 @@
             "module": "data.dataset_ema",
             "class_name": "StudentTeacherDataset",
             "args": {
-                "root": "/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
+                "root": "/localdata/tzhangbu/dataset/refcoco",
+                "augmented_text_root": "augmentation/data",
                 "dataset": "unc",
                 "split": "train",
                 "max_tokens": 20,
                 "max_iters": null,
                 "teacher_transforms": null,
-                "student_transforms": null
+                "student_transforms": null,
+                "use_aug_text_prob": 0.75
             }
         },
         "l1": {
