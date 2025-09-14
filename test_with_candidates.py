@@ -351,12 +351,10 @@ def main(args):
     test_sampler = torch.utils.data.SequentialSampler(dataset)
     data_loader_test = torch.utils.data.DataLoader(
         dataset,
-        batch_size=6, 
+        batch_size=stream_configs.get("batch_size", 1), 
         sampler=test_sampler,
         num_workers=args.workers,
         collate_fn=PseudoLabelDataset.eval_collate_fn,
-        pin_memory=True,
-        persistent_workers=True
     )
     # 模型加载（保持不变）
     single_model = segmentation.__dict__[args.model](pretrained='', args=args)
