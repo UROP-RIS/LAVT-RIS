@@ -1,7 +1,7 @@
 #!/bin/bash
 mkdir -p ./models/refcoco
 
-gpu="0,1,2,7"
+gpu="2,3,4,5,6,7"
 export CUDA_VISIBLE_DEVICES=$gpu
 np=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n' | wc -l)
 
@@ -13,7 +13,7 @@ torchrun \
     --dataset refcoco \
     --model_id refcoco \
     --pseudo_dataset unc \
-    --batch-size 12 \
+    --batch-size 11 \
     --lr 0.00005 \
     --workers 12 \
     --wd 1e-2 \
@@ -24,5 +24,5 @@ torchrun \
     --img_size 480 \
     --pin_mem true \
     --ck_bert ./bert/models \
-    --resume checkpoints/refcoco_pseudo.pth \
+    --resume output/refcoco_20250914_144258/checkpoints/model_last_refcoco.pth \
     2>&1 | tee ./models/refcoco/output.log

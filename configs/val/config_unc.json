@@ -5,7 +5,7 @@
         "args":{
             "root": "/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
             "augment_text_root": "augmentation/data",
-            "dataset": "unc+",
+            "dataset": "unc",
             "split": "testB",
             "max_tokens": 20,
             "eval_mode": true
@@ -18,7 +18,7 @@
         "new_label_save_root": "/localdata/zguobd/LAVT-RIS/dataset",
         "load_model_key": "model_t",
         "load_bert_key": "bert_t",
-	"resume": "/data/datasets/zguobd/LAVT-RIS/output/refcoco+_20250914_152024/checkpoints/model_best_refcoco+.pth",
+        "resume": "output/refcoco_20250914_223906/checkpoints/model_best_refcoco.pth",
         "ck_bert": "./bert/models",
         "selection_criterion": "iou",
         "batch_size": 1,
