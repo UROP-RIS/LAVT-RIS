@@ -1,7 +1,7 @@
 #!/bin/bash
 mkdir -p ./models/refcoco
 
-gpu="2,3,4,5,6,7"
+gpu="0,2,3,4"
 export CUDA_VISIBLE_DEVICES=$gpu
 np=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n' | wc -l)
 
@@ -19,10 +19,10 @@ torchrun \
     --wd 1e-2 \
     --swin_type base \
     --pretrained_swin_weights ./pretrained_weights/swin_base_patch4_window12_384_22k.pth \
-    --configs "configs/ema_unc.json" \
+    --configs "configs/ema_unc_multi_text.json" \
     --epochs 20 \
     --img_size 480 \
     --pin_mem true \
     --ck_bert ./bert/models \
-    --resume output/refcoco_20250914_144258/checkpoints/model_last_refcoco.pth \
+    --resume checkpoints/refcoco_correction.pth \
     2>&1 | tee ./models/refcoco/output.log

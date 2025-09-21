@@ -165,6 +165,8 @@ def evaluate_pseudo_candidate(model, data_loader, bert_model, device, output_dir
 
                 # Resize 到原始分辨率
                 pred_mask = cv2.resize((pred_score > 0.5).astype(np.uint8), (orig_w, orig_h), interpolation=cv2.INTER_NEAREST).astype(bool)
+                pred_mask = postprocess_binary_mask(pred_mask, max_hole_area=100, max_sprinkle_area=100)
+                pred_mask = fill_holes_in_components(pred_mask)
                 pred_score_vis = cv2.resize(pred_score, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)
 
                 # === Step 1: 找最佳候选 ===

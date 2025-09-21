@@ -135,7 +135,11 @@ class ConsistentDiceLoss(nn.Module):
 
         # 一致性损失 = 1 - 平均 Soft IoU
         # 注意：我们最小化这个损失，所以当预测越一致时，IoU 越高，损失越低。
-        consistency_loss = 1.0 - mean_iou
+        dice_loss = 1.0 - mean_iou
+        
+    # 👇 加这一行！约束整个概率图，稳定训练
+        l1_loss = F.l1_loss(prob_clean, prob_aug)
+        consistency_loss = dice_loss + 0.1 * l1_loss  # 0.1 是可调超参
         consistency_loss = consistency_loss * scale_factor  # 可选的缩放因子
 
         return consistency_loss

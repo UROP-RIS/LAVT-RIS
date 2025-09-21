@@ -8,6 +8,8 @@ import os
 import json
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
+from pycocotools import mask as pycocotools_mask
+from tqdm import tqdm
 
 
 def denormalize(tensor, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
@@ -149,8 +151,8 @@ class StudentTeacherDataset(AbstractDataset):
                 custom_T.RandomNoise(0.6, noise_level=0.3),
                 custom_T.RandomCrop(0.5, 360, 480),
                 custom_T.Resize(480),
-                custom_T.RandomHorizontalFlip(0.5),
-                custom_T.RandomGrayScale(0.3),
+                custom_T.RandomHorizontalFlip(0.2),
+                custom_T.RandomGrayScale(0.1),
                 custom_T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
                 custom_T.ToTensor()
             ]
@@ -168,6 +170,12 @@ class StudentTeacherDataset(AbstractDataset):
         )
         return transforms
     
+    @staticmethod
+    def post_process_mask(mask):
+        mask = postprocess_binary_mask(mask, max_hole_area=100, max_sprinkle_area=100)
+        mask = fill_holes_in_components(mask)
+        return mask.astype(np.uint8)
+    
     def __init__(self, root: str = "/data/datasets/tzhangbu/Cherry-Pick/data/refcoco", 
                  augmented_text_root: str = "augmentation/data",
                  dataset: str = "unc",
@@ -178,53 +186,114 @@ class StudentTeacherDataset(AbstractDataset):
                  teacher_transforms=None,
                  student_transforms=None,
                  use_aug_text_prob=0.75,
+                 supervision="single_text",
+                 cls_result_root="/data/datasets/tzhangbu/Cherry-Pick/local_trial",
+                 
                  ):
         super().__init__(
-            root=root, 
+            root=root,
             dataset=dataset, 
             split=split, 
+            index_suffix=index_suffix,
             max_tokens=max_tokens, 
             image_transforms=None
         )
-        self.augmented_dataset_text_root = os.path.join(augmented_text_root, dataset, split)
         self.max_iters = max_iters
         self.teacher_transforms = teacher_transforms if teacher_transforms is not None else self.get_default_teacher_transforms()
         self.student_transforms = student_transforms if student_transforms is not None else self.get_default_student_transforms()
-        
-        self.index_files = sorted(os.listdir(self.index_root), key=self.extract_number)
-        if self.max_iters is not None:
-            self.index_files = self.index_files[:self.max_iters]
-        
         self.use_aug_text_prob = use_aug_text_prob
+        
+        self.supervision = supervision
+        if self.supervision == "multi_text":
+            self.cls_result_root = cls_result_root
+            self.cls_results_path = f"{cls_result_root}/img_cls_result_{self.dataset}_{self.split}.json"
+            self.cls_results = json.load(open(self.cls_results_path, 'r'))["grouped_data"]
+            self.img_items = []
+            self.target_items = []
+            self.build_filename_to_corrected_rle_map()
+            for img_item in self.cls_results:
+                for target_item in img_item:
+                    self.target_items.append(target_item)
+                self.img_items.append(img_item)
+            if max_iters is not None and self.supervsion == "multi_text":
+                self.target_items = self.target_items[:max_iters]
+            
+        
+        elif self.supervsion == "single_text":
+            self.index_files = sorted(os.listdir(self.index_root), key=self.extract_number)
+            if self.max_iters is not None:
+                self.index_files = self.index_files[:self.max_iters]
+            
+            self.augmented_dataset_text_root = os.path.join(augmented_text_root, dataset, split)
+        
+        else:
+            raise ValueError(f"Unknown supervision mode: {self.supervsion}")
+    
+    def build_filename_to_corrected_rle_map(self):
+        self.filename_to_rle_map = {}
+        for fname in tqdm(os.listdir(self.mt_label_root), desc="Loading corrected pseudo labels"):
+            fpath = os.path.join(self.mt_label_root, fname)
+            data = json.load(open(fpath, 'r'))
+            self.filename_to_rle_map[self.extract_number(data["image_txt_gt_path"])] = data["pseudo_mask"]
+        
+        print(f"Loaded {len(self.filename_to_rle_map)} corrected pseudo labels from {self.mt_label_root}")
+        
     
     def __len__(self):
-        return len(self.index_files)
+        return len(self.index_files) if self.supervision == "single_text" else len(self.target_items)
 
     def __getitem__(self, idx):
-        index_path = os.path.join(self.index_root, self.index_files[idx])
-        img, mask_array, txt, similarity_scores, predicted_mask_id = self.load_from_index(index_path)
-        normalized_scores = self.normalize_to_softmax(similarity_scores)
-        target_loss_weight = normalized_scores[predicted_mask_id]
         
-        ## Post process mask array
-        mask_array = postprocess_binary_mask(mask_array, max_hole_area=100, max_sprinkle_area=100)
-        mask_array = fill_holes_in_components(mask_array)
-        mask_array = mask_array.astype(np.uint8) 
-        
-        # Augmented text
-        data_id = self.extract_number(os.path.basename(index_path))
-        augment_text_path = os.path.join(self.augmented_dataset_text_root, f"{self.dataset}_{self.split}_augtext_{data_id}.json")
-        if os.path.exists(augment_text_path):
-            aug_data = json.load(open(augment_text_path, 'r'))
-            aug_text_keys = list(aug_data.keys())[1:]
-            if aug_text_keys and len(aug_text_keys) > 0:
-                selected = np.random.choice(aug_text_keys)
-                aug_txt = aug_data[selected]
+        if self.supervision == "single_text":
+            index_path = os.path.join(self.index_root, self.index_files[idx])
+            img, mask_array, txt, similarity_scores, predicted_mask_id = self.load_from_index(index_path)
+            normalized_scores = self.normalize_to_softmax(similarity_scores)
+            target_loss_weight = normalized_scores[predicted_mask_id]
+            ## Post process mask array
+            mask_array = self.post_process_mask(mask_array)
+            # Augmented text
+            data_id = self.extract_number(os.path.basename(index_path))
+            augment_text_path = os.path.join(self.augmented_dataset_text_root, f"{self.dataset}_{self.split}_augtext_{data_id}.json")
+            if os.path.exists(augment_text_path):
+                aug_data = json.load(open(augment_text_path, 'r'))
+                aug_text_keys = list(aug_data.keys())[1:]
+                if aug_text_keys and len(aug_text_keys) > 0:
+                    selected = np.random.choice(aug_text_keys)
+                    aug_txt = aug_data[selected]
+                else:
+                    aug_txt = txt
             else:
                 aug_txt = txt
-        else:
-            aug_txt = txt
         
+        elif self.supervision == "multi_text":
+            target_item = self.target_items[idx]
+            selected_index = np.random.choice(target_item)
+            others = [i for i in target_item if i != selected_index]
+            if len(others) == 0:
+                aug_index = selected_index
+            else:
+                aug_index = np.random.choice(others)
+            index_path = os.path.join(self.index_root, f"{self.dataset}_{self.split}_{selected_index}.json")
+            img, orig_mask_array, txt, similarity_scores, predicted_mask_id = self.load_from_index(index_path)
+            normalized_scores = self.normalize_to_softmax(similarity_scores)
+            
+            ## Load corrected label
+            data_id = self.extract_number(os.path.basename(index_path))
+            try:
+                mask_array = pycocotools_mask.decode(self.filename_to_rle_map[data_id])
+            except KeyError:
+                print(f"Warning: No corrected pseudo label for data id {data_id}. Using original pseudo label.")
+                mask_array = orig_mask_array
+            mask_array = self.post_process_mask(mask_array)
+            
+            target_loss_weight = normalized_scores[predicted_mask_id]
+            aug_index_path = os.path.join(self.index_root, f"{self.dataset}_{self.split}_{aug_index}.json")
+            aug_index_data = json.load(open(aug_index_path, 'r'))
+            aug_img_txt_gt_name = aug_index_data["img_txt_gt_file_name"]
+            aug_img_txt_gt_path = os.path.join(self.image_txt_gt_root, aug_img_txt_gt_name)
+            aug_img_txt_gt = np.load(aug_img_txt_gt_path, allow_pickle=True)
+            aug_data_dict = {key: aug_img_txt_gt[key] for key in aug_img_txt_gt}
+            aug_txt = aug_data_dict['sent_batch'][0]
         
         input_teacher = {
             "img": img,
@@ -305,8 +374,16 @@ if __name__ == "__main__":
         dataset="unc",
         split="train",
         max_iters=None,
-        use_aug_text_prob=0.75
+        use_aug_text_prob=0.8,
+        supervision="multi_text",
+        index_suffix="consistent"
     )
+    
+    # for i in range(10):
+    #     batch = dataset[i]
+    #     print(f"Sample {i}:")
+    #     print(" Teacher text:", batch["teacher"]["text"])
+    #     print(" Student text:", batch["student"]["text"])
     
     dataloader = torch.utils.data.DataLoader(
         dataset,

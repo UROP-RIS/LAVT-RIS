@@ -26,14 +26,20 @@ class AbstractDataset(torch.utils.data.Dataset):
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         if index_suffix is None:
             self.index_root = f"{self.root}/{self.dataset}/{self.split}_pseudo_score"
+            self.mt_label_root = f"{self.root}/{self.dataset}/{self.split}_mt_pseudo_label"
         else:
             self.index_root = f"{self.root}/{self.dataset}/{self.split}_pseudo_score_{index_suffix}"
-        self.index_root = f"{self.root}/{self.dataset}/{self.split}_pseudo_score"
+            self.mt_label_root = f"{self.root}/{self.dataset}/{self.split}_mt_pseudo_label_{index_suffix}"
         self.image_txt_gt_root = f"{self.root}/{self.dataset}/{self.split}_batch"
         self.mask_root = f"{self.root}/{self.dataset}/{self.split}_mask_newB_batch"
         
+        print("==" * 20)
+        print(f"Loading dataset from {self.index_root}")
+        print(f"Image text ground truth root: {self.image_txt_gt_root}")
+        print(f"Mask root: {self.mask_root}")
+        
     def extract_number(self, filename):
-        match = re.search(r'_(\d+)\.json$', filename)
+        match = re.search(r'_(\d+)\.[^.]+$', filename)
         return int(match.group(1)) if match else -1
     
     def tokenize_text(self, text: str) -> tuple[torch.Tensor, torch.Tensor]:

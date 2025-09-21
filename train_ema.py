@@ -212,6 +212,8 @@ def train_one_epoch(model_t,
             threshold = stream_configs["label_supervision_threshold"]
             valid_label_mask = (sup_loss_weight > threshold).float() # B,
             sup_loss_weight = sup_loss_weight * valid_label_mask
+        else:
+            sup_loss_weight = torch.ones_like(sup_loss_weight)
 
         av_pixel_loss = l1(out_s['out'], label_s, reduce=None).mean(dim=(1,2))  # (B, H, W) -> (B,)
         label_loss = (av_pixel_loss * sup_loss_weight).mean(dim=0)

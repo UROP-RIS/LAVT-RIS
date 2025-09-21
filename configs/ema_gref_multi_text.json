@@ -1,0 +1,92 @@
+{
+    "train": {
+        "dataset": {
+            "module": "torch.utils.data",
+            "class_name": "ConcatDataset",
+            "args": {
+                "datasets": [
+                    {
+                        "module": "data.dataset_ema",
+                        "class_name": "StudentTeacherDataset",
+                        "args": {
+                            "root": "/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
+                            "augmented_text_root": "augmentation/data",
+                            "dataset": "unc",
+                            "split": "train",
+                            "max_tokens": 20,
+                            "index_suffix": "consistent",
+                            "max_iters": null,
+                            "teacher_transforms": null,
+                            "student_transforms": null,
+                            "use_aug_text_prob": 0.80,
+                            "supervision": "multi_text",
+                            "cls_result_root": "/data/datasets/tzhangbu/Cherry-Pick/local_trial"
+                        }
+                    },
+                                        {
+                        "module": "data.dataset_ema",
+                        "class_name": "StudentTeacherDataset",
+                        "args": {
+                            "root": "/data/datasets/tzhangbu/Cherry-Pick/data/refcoco",
+                            "augmented_text_root": "augmentation/data",
+                            "dataset": "Gref",
+                            "split": "train",
+                            "max_tokens": 20,
+                            "index_suffix": "consistent",
+                            "max_iters": null,
+                            "teacher_transforms": null,
+                            "student_transforms": null,
+                            "use_aug_text_prob": 0.80,
+                            "supervision": "multi_text",
+                            "cls_result_root": "/data/datasets/tzhangbu/Cherry-Pick/local_trial"
+                        }
+                    }
+                ]
+            }
+        },
+
+        "collate_fn": {
+            "module": "data.dataset_ema",
+            "class_name": "make_collate_fn",
+            "args": {}
+        },
+        "l1": {
+            "module": "loss",
+            "class_name": "LabelCriterion",
+            "args": {
+                "weight": [0.9, 1.1]
+            }
+        },
+        "l2": {
+            "module": "loss",
+            "class_name": "ConsistentDiceLoss",
+            "args": {
+                "smooth": 0.000001
+            }
+        },
+        "l3": {
+            "module": "torch.nn",
+            "class_name": "MSELoss",
+            "args": {
+                "reduction": "mean"
+            }
+        },
+        "loss_weights": [1.0, 0.5, 0.05],
+        "ema_keep_rate": 0.9996,
+        "stream_configs": {
+            "data_fraction_epoch": 0.5,
+            "label_supervision": null,
+            "label_supervision_threshold": 0.90
+        }
+    },
+    "val": {
+        "dataset": {
+            "module": "data.dataset_refer_bert",
+            "class_name": "get_dataset",
+            "args": {
+                "image_set": "val",
+                "dataset": "refcoco"
+            }
+        }
+    }
+}

@@ -18,7 +18,7 @@
         "new_label_save_root": "/localdata/zguobd/LAVT-RIS/dataset",
         "load_model_key": "model_t",
         "load_bert_key": "bert_t",
-        "resume": "output/gref_google_20250910_162311/checkpoints/model_best_gref_google.pth",
+        "resume": "output/gref_google_20250920_144118/checkpoints/model_best_gref_google.pth",
         "ck_bert": "./bert/models",
         "selection_criterion": "iou",
         "batch_size": 1,

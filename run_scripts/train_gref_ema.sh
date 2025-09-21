@@ -1,7 +1,7 @@
 #!/bin/bash
 mkdir -p ./models/Gref
 
-gpu="0,1"
+gpu="0,1,2,3"
 export CUDA_VISIBLE_DEVICES=$gpu
 np=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n' | wc -l)
 
@@ -21,8 +21,8 @@ torchrun \
     --swin_type base \
     --pretrained_swin_weights ./pretrained_weights/swin_base_patch4_window12_384_22k.pth \
     --epochs 20 \
-    --configs ./configs/ema_gref.json \
-    --resume output/gref_google_20250910_162311/checkpoints/model_best_gref_google.pth \
+    --configs ./configs/ema_gref_multi_text.json \
+    --resume checkpoints/gref_consistent_with_unc.pth \
     --img_size 480 \
     --pin_mem true \
     --ck_bert ./bert/models \
